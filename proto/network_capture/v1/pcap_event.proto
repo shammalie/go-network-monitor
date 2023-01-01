@@ -33,7 +33,7 @@ message TransportLayer {
 
 message ApplicationLayer {
     Protocol protocol = 1;
-    string payload = 2;
+    bytes payload = 2;
 }
 
 message Metadata {
