@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option go_package = "network_capture.v1";
+package network_capture.v1;
+
+service NetworkCaptureService {
+    // Submit a pcap capture and relay an action for the client.
+    rpc NetworkCapture(NetworkCaptureRequest) returns (NetworkCaptureResponse) {}
+}
+
+message NetworkCaptureRequest {
+    NetworkLayer network_layer = 1;
+    TransportLayer transport_layer = 2;
+    ApplicationLayer application_layer = 3;
+    Metadata metadata = 4;
+}
+
+message Protocol {
+    string name = 1;
+}
+
+message NetworkLayer {
+    string src_ip = 1;
+    string dst_ip = 2;
+    Protocol protocol = 3;
+}
+
+message TransportLayer {
+    string src_port = 1;
+    string dst_port = 2;
+    Protocol protocol = 3;
+}
+
+message ApplicationLayer {
+    Protocol protocol = 1;
+    string payload = 2;
+}
+
+message Metadata {
+    int64 timestamp = 1;
+    int64 capture_length = 2;
+    int64 original_packet_length = 3;
+    bool truncated = 4;
+}
+
+message NetworkCaptureResponse {
+    string outcome = 1;
+}
