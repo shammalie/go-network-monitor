@@ -26,7 +26,7 @@ func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcCl
 }
 
 func (c *GrpcClient) SendNetworkCapture(pcap *NetworkCaptureRequest) (*NetworkCaptureResponse, error) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(contextTime))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(contextTime*time.Second))
 	defer cancel()
 	resp, err := c.networkCaptureClient.NetworkCapture(ctx, pcap)
 	if err != nil {
