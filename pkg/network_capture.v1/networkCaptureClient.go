@@ -15,8 +15,7 @@ type GrpcClient struct {
 	networkCaptureClient NetworkCaptureServiceClient
 }
 
-func NewNetworkCaptureClient(serverAddr string) *GrpcClient {
-	var opts []grpc.DialOption
+func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcClient {
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
 		panic(err)
