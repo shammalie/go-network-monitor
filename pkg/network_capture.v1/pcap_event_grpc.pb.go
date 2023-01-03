@@ -23,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NetworkCaptureServiceClient interface {
 	// Submit a pcap capture and relay an action for the client.
-	NetworkCapture(ctx context.Context, in *NetworkCaptureRequest, opts ...grpc.CallOption) (*NetworkCaptureResponse, error)
+	NetworkCapture(ctx context.Context, opts ...grpc.CallOption) (NetworkCaptureService_NetworkCaptureClient, error)
 }
 
 type networkCaptureServiceClient struct {
@@ -34,13 +34,35 @@ func NewNetworkCaptureServiceClient(cc grpc.ClientConnInterface) NetworkCaptureS
 	return &networkCaptureServiceClient{cc}
 }
 
-func (c *networkCaptureServiceClient) NetworkCapture(ctx context.Context, in *NetworkCaptureRequest, opts ...grpc.CallOption) (*NetworkCaptureResponse, error) {
-	out := new(NetworkCaptureResponse)
-	err := c.cc.Invoke(ctx, "/network_capture.v1.NetworkCaptureService/NetworkCapture", in, out, opts...)
+func (c *networkCaptureServiceClient) NetworkCapture(ctx context.Context, opts ...grpc.CallOption) (NetworkCaptureService_NetworkCaptureClient, error) {
+	stream, err := c.cc.NewStream(ctx, &NetworkCaptureService_ServiceDesc.Streams[0], "/network_capture.v1.NetworkCaptureService/NetworkCapture", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &networkCaptureServiceNetworkCaptureClient{stream}
+	return x, nil
+}
+
+type NetworkCaptureService_NetworkCaptureClient interface {
+	Send(*NetworkCaptureRequest) error
+	Recv() (*NetworkCaptureResponse, error)
+	grpc.ClientStream
+}
+
+type networkCaptureServiceNetworkCaptureClient struct {
+	grpc.ClientStream
+}
+
+func (x *networkCaptureServiceNetworkCaptureClient) Send(m *NetworkCaptureRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *networkCaptureServiceNetworkCaptureClient) Recv() (*NetworkCaptureResponse, error) {
+	m := new(NetworkCaptureResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // NetworkCaptureServiceServer is the server API for NetworkCaptureService service.
@@ -48,7 +70,7 @@ func (c *networkCaptureServiceClient) NetworkCapture(ctx context.Context, in *Ne
 // for forward compatibility
 type NetworkCaptureServiceServer interface {
 	// Submit a pcap capture and relay an action for the client.
-	NetworkCapture(context.Context, *NetworkCaptureRequest) (*NetworkCaptureResponse, error)
+	NetworkCapture(NetworkCaptureService_NetworkCaptureServer) error
 	mustEmbedUnimplementedNetworkCaptureServiceServer()
 }
 
@@ -56,8 +78,8 @@ type NetworkCaptureServiceServer interface {
 type UnimplementedNetworkCaptureServiceServer struct {
 }
 
-func (UnimplementedNetworkCaptureServiceServer) NetworkCapture(context.Context, *NetworkCaptureRequest) (*NetworkCaptureResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method NetworkCapture not implemented")
+func (UnimplementedNetworkCaptureServiceServer) NetworkCapture(NetworkCaptureService_NetworkCaptureServer) error {
+	return status.Errorf(codes.Unimplemented, "method NetworkCapture not implemented")
 }
 func (UnimplementedNetworkCaptureServiceServer) mustEmbedUnimplementedNetworkCaptureServiceServer() {}
 
@@ -72,22 +94,30 @@ func RegisterNetworkCaptureServiceServer(s grpc.ServiceRegistrar, srv NetworkCap
 	s.RegisterService(&NetworkCaptureService_ServiceDesc, srv)
 }
 
-func _NetworkCaptureService_NetworkCapture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NetworkCaptureRequest)
-	if err := dec(in); err != nil {
+func _NetworkCaptureService_NetworkCapture_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(NetworkCaptureServiceServer).NetworkCapture(&networkCaptureServiceNetworkCaptureServer{stream})
+}
+
+type NetworkCaptureService_NetworkCaptureServer interface {
+	Send(*NetworkCaptureResponse) error
+	Recv() (*NetworkCaptureRequest, error)
+	grpc.ServerStream
+}
+
+type networkCaptureServiceNetworkCaptureServer struct {
+	grpc.ServerStream
+}
+
+func (x *networkCaptureServiceNetworkCaptureServer) Send(m *NetworkCaptureResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *networkCaptureServiceNetworkCaptureServer) Recv() (*NetworkCaptureRequest, error) {
+	m := new(NetworkCaptureRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(NetworkCaptureServiceServer).NetworkCapture(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/network_capture.v1.NetworkCaptureService/NetworkCapture",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetworkCaptureServiceServer).NetworkCapture(ctx, req.(*NetworkCaptureRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return m, nil
 }
 
 // NetworkCaptureService_ServiceDesc is the grpc.ServiceDesc for NetworkCaptureService service.
@@ -96,12 +126,14 @@ func _NetworkCaptureService_NetworkCapture_Handler(srv interface{}, ctx context.
 var NetworkCaptureService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "network_capture.v1.NetworkCaptureService",
 	HandlerType: (*NetworkCaptureServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "NetworkCapture",
-			Handler:    _NetworkCaptureService_NetworkCapture_Handler,
+			StreamName:    "NetworkCapture",
+			Handler:       _NetworkCaptureService_NetworkCapture_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/network_capture/v1/pcap_event.proto",
 }

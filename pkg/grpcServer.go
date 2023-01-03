@@ -30,7 +30,7 @@ func NewGrpcServer(port int, hostname string) *grpcServer {
 	}
 	var opts []grpc.ServerOption
 	s := grpc.NewServer(opts...)
-	network_capture_v1.RegisterNetworkCaptureServiceServer(s, &network_capture_v1.Server{})
+	network_capture_v1.RegisterNetworkCaptureServiceServer(s, &network_capture_v1.NetworkCaptureServer{})
 	return &grpcServer{
 		listener: lis,
 		server:   s,

@@ -1,8 +1,10 @@
 package network_capture_v1
 
 import (
-	"context"
+	context "context"
 	"fmt"
+	"io"
+	"sync"
 	"time"
 
 	"github.com/spf13/viper"
@@ -12,6 +14,9 @@ import (
 type GrpcClient struct {
 	networkCaptureClient NetworkCaptureServiceClient
 	contextTime          time.Duration
+	stream               NetworkCaptureService_NetworkCaptureClient
+	receivedActions      []*NetworkCaptureResponse
+	mu                   sync.Mutex
 }
 
 func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcClient {
@@ -24,18 +29,49 @@ func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcCl
 	if err != nil {
 		panic(err)
 	}
-	return &GrpcClient{
+	client := &GrpcClient{
 		networkCaptureClient: NewNetworkCaptureServiceClient(conn),
 		contextTime:          time.Duration(contextTimeout) * time.Second,
 	}
+	client.initaliseNetworkCaptureStream()
+	return client
 }
 
-func (c *GrpcClient) SendNetworkCapture(pcap *NetworkCaptureRequest) (*NetworkCaptureResponse, error) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(c.contextTime))
+func (c *GrpcClient) initaliseNetworkCaptureStream() {
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := c.networkCaptureClient.NetworkCapture(ctx, pcap)
+	stream, err := c.networkCaptureClient.NetworkCapture(ctx)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return resp, nil
+	c.stream = stream
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			in, err := c.stream.Recv()
+			if err == io.EOF {
+				// Read done.
+				wg.Done()
+				return
+			}
+			if err != nil {
+				panic(err)
+			}
+			c.mu.Lock()
+			c.receivedActions = append(c.receivedActions, in)
+			c.mu.Unlock()
+		}
+	}()
+}
+
+func (c *GrpcClient) SendNetworkCapture(pcap *NetworkCaptureRequest) {
+	if err := c.stream.Send(pcap); err != nil {
+		panic(err)
+	}
+}
+
+func (c *GrpcClient) CloseStream() error {
+	return c.stream.CloseSend()
 }

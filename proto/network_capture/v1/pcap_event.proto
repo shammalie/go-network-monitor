@@ -5,7 +5,7 @@ package network_capture.v1;
 
 service NetworkCaptureService {
     // Submit a pcap capture and relay an action for the client.
-    rpc NetworkCapture(NetworkCaptureRequest) returns (NetworkCaptureResponse) {}
+    rpc NetworkCapture(stream NetworkCaptureRequest) returns (stream NetworkCaptureResponse) {}
 }
 
 message NetworkCaptureRequest {
@@ -44,5 +44,7 @@ message Metadata {
 }
 
 message NetworkCaptureResponse {
-    string outcome = 1;
+    string ip = 1;
+    string action = 2;
+    int64 timestamp = 3;
 }
