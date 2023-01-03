@@ -42,9 +42,7 @@ func getOutboundIP() string {
 		panic(err)
 	}
 	defer conn.Close()
-
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
 	return localAddr.IP.String()
 }
 
