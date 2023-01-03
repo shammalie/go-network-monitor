@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	heartbeat_v1 "github.com/shammalie/go-network-monitor/pkg/heartbeat.v1"
 	network_capture_v1 "github.com/shammalie/go-network-monitor/pkg/network_capture.v1"
 	"google.golang.org/grpc"
 )
@@ -31,6 +32,7 @@ func NewGrpcServer(port int, hostname string) *grpcServer {
 	var opts []grpc.ServerOption
 	s := grpc.NewServer(opts...)
 	network_capture_v1.RegisterNetworkCaptureServiceServer(s, &network_capture_v1.NetworkCaptureServer{})
+	heartbeat_v1.RegisterHeartbeatServiceServer(s, &heartbeat_v1.HeartbeatServer{})
 	return &grpcServer{
 		listener: lis,
 		server:   s,

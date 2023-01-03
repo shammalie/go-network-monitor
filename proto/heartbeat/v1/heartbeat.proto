@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option go_package = "heartbeat.v1";
+package heartbeat.v1;
+
+service HeartbeatService {
+    // Server heartbeat request
+    rpc HeartbeatRequest(HeartbeatServiceRequest) returns (HeartbeatServiceResponse) {}
+}
+
+message HeartbeatServiceRequest {
+    string ip = 1;
+    string hostname = 2;
+    int64 timestamp = 3;
+}
+
+message HeartbeatServiceResponse {
+    bool up = 1;
+    ServiceStatus status = 2;
+}
+
+enum ServiceStatus {
+    SERVICE_UP = 0;
+    SERVICE_DOWN = 1;
+    SERVICE_BUSY = 2;
+    SERVICE_UNAVAILABLE = 3;
+}
