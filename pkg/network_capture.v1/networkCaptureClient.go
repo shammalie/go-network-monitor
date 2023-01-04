@@ -7,16 +7,17 @@ import (
 	"sync"
 	"time"
 
+	heartbeat_v1 "github.com/shammalie/go-network-monitor/pkg/heartbeat.v1"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
 type GrpcClient struct {
+	ReceivedActions      chan *NetworkCaptureResponse
+	HeartbeatClient      *heartbeat_v1.GrpcHeartbeatClient
 	networkCaptureClient NetworkCaptureServiceClient
 	contextTime          time.Duration
 	stream               NetworkCaptureService_NetworkCaptureClient
-	receivedActions      []*NetworkCaptureResponse
-	mu                   sync.Mutex
 }
 
 func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcClient {
@@ -30,6 +31,8 @@ func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcCl
 		panic(err)
 	}
 	client := &GrpcClient{
+		ReceivedActions: make(chan *NetworkCaptureResponse),
+		// HeartbeatClient:      heartbeat_v1.NewHeartbeatClient(conn),
 		networkCaptureClient: NewNetworkCaptureServiceClient(conn),
 		contextTime:          time.Duration(contextTimeout) * time.Second,
 	}
@@ -39,9 +42,7 @@ func NewNetworkCaptureClient(serverAddr string, opts ...grpc.DialOption) *GrpcCl
 
 func (c *GrpcClient) initaliseNetworkCaptureStream() {
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	stream, err := c.networkCaptureClient.NetworkCapture(ctx)
+	stream, err := c.networkCaptureClient.NetworkCapture(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -59,9 +60,7 @@ func (c *GrpcClient) initaliseNetworkCaptureStream() {
 			if err != nil {
 				panic(err)
 			}
-			c.mu.Lock()
-			c.receivedActions = append(c.receivedActions, in)
-			c.mu.Unlock()
+			c.ReceivedActions <- in
 		}
 	}()
 }

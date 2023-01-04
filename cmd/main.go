@@ -14,6 +14,11 @@ const (
 func main() {
 	server := pkg.NewGrpcServer(port, hostname)
 	fmt.Printf("starting server %s:%d\n", hostname, port)
+	go func() {
+		for e := range server.NetworkCaptureServer.ClientEvents {
+			fmt.Println(e)
+		}
+	}()
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
 	}

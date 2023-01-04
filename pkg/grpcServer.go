@@ -15,8 +15,10 @@ const (
 )
 
 type grpcServer struct {
-	listener net.Listener
-	server   *grpc.Server
+	Heartbeat            *heartbeat_v1.HeartbeatServer
+	NetworkCaptureServer *network_capture_v1.NetworkCaptureServer
+	listener             net.Listener
+	server               *grpc.Server
 }
 
 // Create a new grpc server that implements the handler for network_capture.v1#
@@ -31,11 +33,17 @@ func NewGrpcServer(port int, hostname string) *grpcServer {
 	}
 	var opts []grpc.ServerOption
 	s := grpc.NewServer(opts...)
-	network_capture_v1.RegisterNetworkCaptureServiceServer(s, &network_capture_v1.NetworkCaptureServer{})
-	heartbeat_v1.RegisterHeartbeatServiceServer(s, &heartbeat_v1.HeartbeatServer{})
+
+	heartbeatServer := heartbeat_v1.NewHeartbeatServer()
+	networkCaptureServer := network_capture_v1.NewNetworkCaptureServer()
+
+	network_capture_v1.RegisterNetworkCaptureServiceServer(s, networkCaptureServer)
+	heartbeat_v1.RegisterHeartbeatServiceServer(s, heartbeatServer)
 	return &grpcServer{
-		listener: lis,
-		server:   s,
+		Heartbeat:            heartbeatServer,
+		NetworkCaptureServer: networkCaptureServer,
+		listener:             lis,
+		server:               s,
 	}
 }
 

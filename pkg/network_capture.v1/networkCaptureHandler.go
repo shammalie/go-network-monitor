@@ -2,15 +2,20 @@ package network_capture_v1
 
 import (
 	"io"
-	"sync"
 	"time"
 )
 
 type NetworkCaptureServer struct {
 	UnimplementedNetworkCaptureServiceServer
-	mu            sync.RWMutex
-	clientEvents  []*NetworkCaptureRequest
-	clientActions []*NetworkCaptureResponse
+	ClientEvents  chan *NetworkCaptureRequest
+	ClientActions chan *NetworkCaptureResponse
+}
+
+func NewNetworkCaptureServer() *NetworkCaptureServer {
+	return &NetworkCaptureServer{
+		ClientEvents:  make(chan *NetworkCaptureRequest),
+		ClientActions: make(chan *NetworkCaptureResponse),
+	}
 }
 
 func (s *NetworkCaptureServer) NetworkCapture(stream NetworkCaptureService_NetworkCaptureServer) error {
@@ -22,23 +27,26 @@ func (s *NetworkCaptureServer) NetworkCapture(stream NetworkCaptureService_Netwo
 		if err != nil {
 			return err
 		}
-		s.mu.Lock()
-		s.clientEvents = append(s.clientEvents, in)
-		s.mu.Unlock()
-		for _, event := range s.clientActions {
-			if err := stream.Send(event); err != nil {
-				return err
+		s.ClientEvents <- in
+		go func() error {
+			for {
+				select {
+				case event := <-s.ClientActions:
+					if err := stream.Send(event); err != nil {
+						return err
+					}
+				case <-stream.Context().Done():
+					return stream.Context().Err()
+				}
 			}
-		}
+		}()
 	}
 }
 
 func (s *NetworkCaptureServer) SendClientAction(ip string, action string) {
-	defer s.mu.Unlock()
-	s.mu.Lock()
-	s.clientActions = append(s.clientActions, &NetworkCaptureResponse{
+	s.ClientActions <- &NetworkCaptureResponse{
 		Ip:        ip,
 		Action:    action,
 		Timestamp: time.Now().UnixMilli(),
-	})
+	}
 }

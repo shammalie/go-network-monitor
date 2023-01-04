@@ -6,10 +6,13 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	grpc "google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type GrpcHeartbeatClient struct {
-	heartbeatClient heartbeatServiceClient
+	heartbeatClient HeartbeatServiceClient
 	ctxTimeSeconds  int
 	clientInfo      clientInfo
 	Heartbeat       Heartbeat
@@ -46,10 +49,10 @@ func getOutboundIP() string {
 	return localAddr.IP.String()
 }
 
-func NewHeartbeatClient() *GrpcHeartbeatClient {
+func NewHeartbeatClient(conn *grpc.ClientConn) *GrpcHeartbeatClient {
 	var wg sync.WaitGroup
 	server := &GrpcHeartbeatClient{
-		heartbeatClient: heartbeatServiceClient{},
+		heartbeatClient: NewHeartbeatServiceClient(conn),
 		ctxTimeSeconds:  5,
 		Heartbeat:       Heartbeat{},
 		clientInfo: clientInfo{
@@ -64,11 +67,7 @@ func NewHeartbeatClient() *GrpcHeartbeatClient {
 			case <-time.NewTicker(5 * time.Second).C:
 				startTime := time.Now()
 				ctx, close := context.WithDeadline(context.Background(), startTime.Add(time.Duration(server.ctxTimeSeconds)*time.Second))
-				resp, err := server.heartbeatClient.HeartbeatRequest(ctx, &HeartbeatServiceRequest{
-					Ip:        server.clientInfo.ip,
-					Hostname:  server.clientInfo.hostname,
-					Timestamp: time.Now().UnixMilli(),
-				})
+				resp, err := server.heartbeatClient.HeartbeatRequest(ctx, &emptypb.Empty{})
 				if err != nil {
 					panic(err)
 				}
@@ -84,6 +83,7 @@ func NewHeartbeatClient() *GrpcHeartbeatClient {
 
 func (s *GrpcHeartbeatClient) updateHeartbeat(resp *HeartbeatServiceResponse, startTime time.Time) {
 	defer s.mu.Unlock()
+	s.mu.Lock()
 	s.Heartbeat.serviceUp = resp.Up
 	s.Heartbeat.serviceStatusCode = resp.Status
 	s.Heartbeat.latency = time.Now().UnixMilli() - startTime.UnixMilli()

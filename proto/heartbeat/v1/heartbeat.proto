@@ -3,15 +3,11 @@ syntax = "proto3";
 option go_package = "heartbeat.v1";
 package heartbeat.v1;
 
+import "google/protobuf/empty.proto";
+
 service HeartbeatService {
     // Server heartbeat request
-    rpc HeartbeatRequest(HeartbeatServiceRequest) returns (HeartbeatServiceResponse) {}
-}
-
-message HeartbeatServiceRequest {
-    string ip = 1;
-    string hostname = 2;
-    int64 timestamp = 3;
+    rpc HeartbeatRequest(google.protobuf.Empty) returns (HeartbeatServiceResponse) {}
 }
 
 message HeartbeatServiceResponse {

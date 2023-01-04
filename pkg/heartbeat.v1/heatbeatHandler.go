@@ -1,6 +1,10 @@
 package heartbeat_v1
 
-import "context"
+import (
+	"context"
+
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
+)
 
 type HeartbeatServer struct {
 	UnimplementedHeartbeatServiceServer
@@ -8,7 +12,14 @@ type HeartbeatServer struct {
 	status ServiceStatus
 }
 
-func (s *HeartbeatServer) GetHeartbeat(ctx context.Context, req *HeartbeatServiceRequest) (*HeartbeatServiceResponse, error) {
+func NewHeartbeatServer() *HeartbeatServer {
+	return &HeartbeatServer{
+		up:     true,
+		status: ServiceStatus_SERVICE_UP,
+	}
+}
+
+func (s *HeartbeatServer) HeartbeatRequest(ctx context.Context, _ *emptypb.Empty) (*HeartbeatServiceResponse, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

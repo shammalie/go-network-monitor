@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,7 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HeartbeatServiceClient interface {
 	// Server heartbeat request
-	HeartbeatRequest(ctx context.Context, in *HeartbeatServiceRequest, opts ...grpc.CallOption) (*HeartbeatServiceResponse, error)
+	HeartbeatRequest(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HeartbeatServiceResponse, error)
 }
 
 type heartbeatServiceClient struct {
@@ -34,7 +35,7 @@ func NewHeartbeatServiceClient(cc grpc.ClientConnInterface) HeartbeatServiceClie
 	return &heartbeatServiceClient{cc}
 }
 
-func (c *heartbeatServiceClient) HeartbeatRequest(ctx context.Context, in *HeartbeatServiceRequest, opts ...grpc.CallOption) (*HeartbeatServiceResponse, error) {
+func (c *heartbeatServiceClient) HeartbeatRequest(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HeartbeatServiceResponse, error) {
 	out := new(HeartbeatServiceResponse)
 	err := c.cc.Invoke(ctx, "/heartbeat.v1.HeartbeatService/HeartbeatRequest", in, out, opts...)
 	if err != nil {
@@ -48,7 +49,7 @@ func (c *heartbeatServiceClient) HeartbeatRequest(ctx context.Context, in *Heart
 // for forward compatibility
 type HeartbeatServiceServer interface {
 	// Server heartbeat request
-	HeartbeatRequest(context.Context, *HeartbeatServiceRequest) (*HeartbeatServiceResponse, error)
+	HeartbeatRequest(context.Context, *emptypb.Empty) (*HeartbeatServiceResponse, error)
 	mustEmbedUnimplementedHeartbeatServiceServer()
 }
 
@@ -56,7 +57,7 @@ type HeartbeatServiceServer interface {
 type UnimplementedHeartbeatServiceServer struct {
 }
 
-func (UnimplementedHeartbeatServiceServer) HeartbeatRequest(context.Context, *HeartbeatServiceRequest) (*HeartbeatServiceResponse, error) {
+func (UnimplementedHeartbeatServiceServer) HeartbeatRequest(context.Context, *emptypb.Empty) (*HeartbeatServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HeartbeatRequest not implemented")
 }
 func (UnimplementedHeartbeatServiceServer) mustEmbedUnimplementedHeartbeatServiceServer() {}
@@ -73,7 +74,7 @@ func RegisterHeartbeatServiceServer(s grpc.ServiceRegistrar, srv HeartbeatServic
 }
 
 func _HeartbeatService_HeartbeatRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeartbeatServiceRequest)
+	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func _HeartbeatService_HeartbeatRequest_Handler(srv interface{}, ctx context.Con
 		FullMethod: "/heartbeat.v1.HeartbeatService/HeartbeatRequest",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HeartbeatServiceServer).HeartbeatRequest(ctx, req.(*HeartbeatServiceRequest))
+		return srv.(HeartbeatServiceServer).HeartbeatRequest(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
