@@ -1,0 +1,54 @@
+// https://dev.bitolog.com/grpc-long-lived-streaming/
+syntax = "proto3";
+
+option go_package = "ip_data.v1";
+package ip_data.v1;
+
+service EventStream {
+    rpc Subscribe(Request) returns (stream SubscribeResponse) {}
+    rpc Unsubscribe(Request) returns (stream UnsubscribeResponse) {}
+}
+
+message Request {
+    int32 id = 1;
+    string apiKey = 2;
+}
+
+message SubscribeResponse {
+    IpEvent event = 1;
+}
+
+message UnsubscribeResponse {
+    string response = 1;
+}
+
+message IpEvent {
+    string id = 1;
+    string ip = 2;
+    string city = 3;
+    string region = 4;
+    string regionCode = 5;
+    string countryCode = 6;
+    string countryCodeIso3 = 7; 
+    string countryName = 8;
+    string countryCapital = 9;
+    string countryTld = 10;
+    string continentCode = 11;
+    bool inEu = 12;
+    string postal = 13; 
+    float latitude = 14;
+    float longitude = 15;
+    string timezone = 16;
+    string utcOffset = 17;
+    string countryCallingCode = 18;
+    string currency = 19;
+    string currencyName = 20;
+    string languages = 21;
+    string asn = 22;
+    string org = 23;
+    string error = 24;
+    string reason = 25;
+    string message = 26;
+    int64 firstSeen = 27;
+    int64 lastSeen = 28;
+}

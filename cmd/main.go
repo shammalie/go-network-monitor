@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/shammalie/go-network-monitor/internal"
 	"github.com/shammalie/go-network-monitor/pkg"
 	"github.com/spf13/viper"
 )
@@ -19,11 +20,14 @@ func main() {
 		panic(err)
 	}
 
+	db := internal.NewMongoClient()
+	eventProcessor := internal.NewEventProcessor(db)
+
 	server := pkg.NewGrpcServer()
 	fmt.Printf("starting server %s:%d\n", server.Hostname, server.Port)
 	go func() {
 		for e := range server.NetworkCaptureServer.ClientEvents {
-			fmt.Println(e)
+			eventProcessor.Events <- e
 		}
 	}()
 	if err := server.ListenAndServe(); err != nil {
