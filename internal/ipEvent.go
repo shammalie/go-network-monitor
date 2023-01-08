@@ -13,7 +13,6 @@ type EventProcessor struct {
 	Events         chan *network_capture_v1.NetworkCaptureRequest
 	db             *Db
 	newIpProcessor *IpProcessor
-	cache          *RedisClient
 }
 
 type Event struct {
@@ -38,7 +37,6 @@ func NewEventProcessor(db *Db) *EventProcessor {
 		Events:         make(chan *network_capture_v1.NetworkCaptureRequest),
 		db:             db,
 		newIpProcessor: NewIpProcessor(db),
-		cache:          NewRedisClient(10, 1*time.Hour),
 	}
 	wg.Add(1)
 	go func() {
@@ -53,20 +51,21 @@ func NewEventProcessor(db *Db) *EventProcessor {
 
 func (p *EventProcessor) handleEvent(event *Event) {
 	srcIp := event.NetworkLayerSourceIp
-	isPrivate, err := IsPrivateIP(srcIp)
-	if err != nil {
-		panic(err)
-	}
-	if !isPrivate && p.newIpProcessor.checkQueue(srcIp) && p.cache.getInMemoryQueue(srcIp) {
-		data, err := p.db.GetIpDataByIp(srcIp)
+
+	go func(ip string) {
+		isPrivate, err := IsPrivateIP(ip)
 		if err != nil {
-			data.Ip = srcIp
-			data.FirstSeen = time.Now().UTC().UnixMilli()
-			p.newIpProcessor.enqueue(data)
-			p.newIpProcessor.ips <- data
+			panic(err)
 		}
-	}
-	p.cache.Set(event.NetworkLayerSourceIp, event.NetworkLayerSourceIp)
+
+		if !isPrivate && !p.newIpProcessor.cache.inCache(ip) {
+			_, err := p.db.GetIpDataByIp(ip)
+			if err != nil {
+				p.newIpProcessor.cache.Set(srcIp, time.Now().UTC().UnixMilli(), 0)
+			}
+		}
+	}(srcIp)
+
 	p.db.InsertIpEvent(event)
 }
 

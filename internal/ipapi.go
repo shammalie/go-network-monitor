@@ -7,13 +7,14 @@ import (
 	"net/http"
 )
 
-func getIpInformation(obj IpDetail) (*IpDetail, error) {
+func getIpInformation(ip string) (*IpDetail, error) {
+	var obj *IpDetail
 	client := http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://ipapi.co/%s/json/", obj.Ip), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://ipapi.co/%s/json/", ip), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "ipapi.co/#go-v1.19.4,github.com/shammalie/go-network-monitor")
+	req.Header.Set("User-Agent", "ipapi.co/#go-v1.19.4")
 	resp, err := client.Do(req)
 	if err != nil && resp.StatusCode >= 400 {
 		return nil, err
@@ -29,5 +30,5 @@ func getIpInformation(obj IpDetail) (*IpDetail, error) {
 	if obj.Error != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("reason: %s, message:%s", *obj.Reason, *obj.Message))
 	}
-	return &obj, nil
+	return obj, nil
 }
