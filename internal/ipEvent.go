@@ -56,33 +56,34 @@ func (p *EventProcessor) handleEvent(event *Event) {
 	if err != nil {
 		panic(err)
 	}
-	if !isPrivate {
-		cacheEvent := p.ipProcessor.cache.getIpEventFromLocalCache(srcIp)
-		if cacheEvent == nil {
-			detail, err := p.db.GetIpDataByIp(srcIp)
-			if err != nil {
-				id := primitive.NewObjectID()
-				event.Ip_id = id
-				cacheEvent = &ipEvent{
-					Id:        id,
-					Ip:        srcIp,
-					Timestamp: time.Now().UTC().UnixMilli(),
-				}
-				err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 0)
-				if err != nil {
-					panic(err)
-				}
-				go func(event ipEvent) {
-					p.ipProcessor.events <- event
-				}(*cacheEvent)
-			} else {
-				event.Ip_id = detail.Id
+	if isPrivate {
+		event.Ip_id = primitive.NewObjectID()
+		p.db.InsertIpEvent(event)
+		return
+	}
+	cacheEvent := p.ipProcessor.cache.getIpEventFromLocalCache(srcIp)
+	if cacheEvent == nil {
+		detail, err := p.db.GetIpDataByIp(srcIp)
+		if err != nil {
+			id := primitive.NewObjectID()
+			event.Ip_id = id
+			cacheEvent = &ipEvent{
+				Id:        id,
+				Ip:        srcIp,
+				Timestamp: time.Now().UTC().UnixMilli(),
 			}
+			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 0)
+			if err != nil {
+				panic(err)
+			}
+			go func(event ipEvent) {
+				p.ipProcessor.events <- event
+			}(*cacheEvent)
 		} else {
-			event.Ip_id = cacheEvent.Id
+			event.Ip_id = detail.Id
 		}
 	} else {
-		event.Ip_id = primitive.NewObjectID()
+		event.Ip_id = cacheEvent.Id
 	}
 	p.db.InsertIpEvent(event)
 }
