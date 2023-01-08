@@ -11,6 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+const (
+	requestCountLimit = 20
+)
+
 type IpProcessor struct {
 	failureCount   int
 	counter        float64
@@ -143,7 +147,7 @@ func (p *IpProcessor) processRequest(ipObj IpDetail) *IpDetail {
 					p.counter,
 					len(p.ips),
 					ipObj.Ip)
-				if p.failureCount > 100 && p.counter != 3600 {
+				if p.failureCount > requestCountLimit && p.counter != 3600 {
 					fmt.Println("extending tick period")
 					p.counter = 3600
 				} else if p.counter < 32 {
