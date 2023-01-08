@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -22,6 +21,7 @@ type IpProcessor struct {
 	StopProcessing chan bool
 	db             *Db
 	cache          *RedisClient
+	events         chan ipEvent
 }
 
 type IpDetail struct {
@@ -62,8 +62,15 @@ func NewIpProcessor(db *Db) *IpProcessor {
 		StopProcessing: make(chan bool),
 		db:             db,
 		cache:          NewRedisClient(5),
+		events:         make(chan ipEvent, 1000),
 	}
-
+	entries, err := processor.cache.loadCacheEntries()
+	if err != nil {
+		panic(err)
+	}
+	for _, e := range entries {
+		processor.events <- e
+	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -77,18 +84,10 @@ func (p *IpProcessor) processorLoop() {
 	defer close(p.StopProcessing)
 	for {
 		select {
-		case event := <-p.cache.subscriptions.Channel():
-			var payload ipEvent
-			err := json.Unmarshal([]byte(event.Payload), &payload)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			response := p.processRequest(payload.Ip)
+		case event := <-p.events:
+			response := p.processRequest(event.Ip)
 			if response == nil {
-				p.cache.Del(payload.Ip)
-			} else {
-				response.FirstSeen = payload.Timestamp
+				p.cache.Del(event.Ip)
 			}
 			if p.failureCount != 0 {
 				p.failureCount = 0
@@ -99,7 +98,7 @@ func (p *IpProcessor) processorLoop() {
 			} else {
 				p.counter = timeInterval
 			}
-			err = p.db.InsertIpDetail(response)
+			err := p.db.InsertIpDetail(response)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -125,7 +124,7 @@ func (p *IpProcessor) processRequest(ip string) *IpDetail {
 					err,
 					p.failureCount,
 					p.counter,
-					len(p.cache.subscriptions.Channel()),
+					len(p.events),
 					ip)
 				if p.failureCount > requestCountLimit && p.counter != 3600 {
 					fmt.Println("extending tick period")

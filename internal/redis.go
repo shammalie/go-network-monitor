@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -19,9 +18,8 @@ const (
 )
 
 type RedisClient struct {
-	client        *redis.Client
-	subscriptions *redis.PubSub
-	ctxTime       int
+	client  *redis.Client
+	ctxTime int
 }
 
 type ipEvent struct {
@@ -40,13 +38,10 @@ func NewRedisClient(ctxTimeSeconds int) *RedisClient {
 	}
 	password := viper.GetString(redisPassword)
 	db := viper.GetInt(redisDb)
-	client := redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db})
 	rdb := &RedisClient{
-		client:        client,
-		subscriptions: client.Subscribe(context.Background(), channelName),
-		ctxTime:       ctxTimeSeconds,
+		client:  redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}),
+		ctxTime: ctxTimeSeconds,
 	}
-	rdb.loadKeys()
 	fmt.Println("loaded redis client")
 	return rdb
 }
@@ -55,35 +50,30 @@ func getTimeoutContext(duration time.Duration) (context.Context, context.CancelF
 	return context.WithTimeout(context.Background(), duration)
 }
 
-func (r *RedisClient) loadKeys() {
+func (r *RedisClient) loadCacheEntries() ([]ipEvent, error) {
+	var entries []ipEvent
 	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
 	defer cancel()
 	iter := r.client.Scan(ctx, 0, "", 0).Iterator()
 	for iter.Next(ctx) {
-		e := ipEvent{
+		event := ipEvent{
 			Ip: iter.Val(),
 		}
-		timestampStr, err := r.Get(e.Ip)
+		timestampStr, err := r.Get(event.Ip)
 		if err != nil {
-			fmt.Println(err)
+			return nil, err
 		}
 		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		e.Timestamp = timestamp
-		b, err := json.Marshal(e)
-		if err != nil {
-			panic(err)
-		}
-		err = r.client.Publish(ctx, channelName, string(b)).Err()
-		if err != nil {
-			panic(err)
-		}
+		event.Timestamp = timestamp
+		entries = append(entries, event)
 	}
 	if err := iter.Err(); err != nil {
-		panic(err)
+		return nil, err
 	}
+	return entries, nil
 }
 
 func (r *RedisClient) inCache(key string) bool {
@@ -112,14 +102,6 @@ func (r *RedisClient) Set(key string, value interface{}, duration time.Duration)
 	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
 	defer cancel()
 	err := r.client.Set(ctx, key, value, duration).Err()
-	if err != nil {
-		return err
-	}
-	b, err := json.Marshal(ipEvent{Ip: key, Timestamp: value.(int64)})
-	if err != nil {
-		return err
-	}
-	err = r.client.Publish(ctx, channelName, string(b)).Err()
 	if err != nil {
 		return err
 	}

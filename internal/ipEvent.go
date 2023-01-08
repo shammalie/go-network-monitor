@@ -10,9 +10,9 @@ import (
 )
 
 type EventProcessor struct {
-	Events         chan *network_capture_v1.NetworkCaptureRequest
-	db             *Db
-	newIpProcessor *IpProcessor
+	Events      chan *network_capture_v1.NetworkCaptureRequest
+	db          *Db
+	ipProcessor *IpProcessor
 }
 
 type Event struct {
@@ -34,9 +34,9 @@ type Event struct {
 func NewEventProcessor(db *Db) *EventProcessor {
 	var wg sync.WaitGroup
 	processor := &EventProcessor{
-		Events:         make(chan *network_capture_v1.NetworkCaptureRequest),
-		db:             db,
-		newIpProcessor: NewIpProcessor(db),
+		Events:      make(chan *network_capture_v1.NetworkCaptureRequest),
+		db:          db,
+		ipProcessor: NewIpProcessor(db),
 	}
 	wg.Add(1)
 	go func() {
@@ -58,10 +58,15 @@ func (p *EventProcessor) handleEvent(event *Event) {
 			panic(err)
 		}
 
-		if !isPrivate && !p.newIpProcessor.cache.inCache(ip) {
+		if !isPrivate && !p.ipProcessor.cache.inCache(ip) {
 			_, err := p.db.GetIpDataByIp(ip)
 			if err != nil {
-				p.newIpProcessor.cache.Set(srcIp, time.Now().UTC().UnixMilli(), 0)
+				time := time.Now().UTC().UnixMilli()
+				p.ipProcessor.cache.Set(srcIp, time, 0)
+				p.ipProcessor.events <- ipEvent{
+					Ip:        ip,
+					Timestamp: time,
+				}
 			}
 		}
 	}(srcIp)
