@@ -17,6 +17,7 @@ type EventProcessor struct {
 
 type Event struct {
 	Id                           primitive.ObjectID `bson:"_id" json:"_id"`
+	Ip_id                        primitive.ObjectID `bson:"ip_id" json:"ip_id"`
 	NetworkLayerSourceIp         string             `bson:"networkLayerSourceIp" json:"networkLayerSourceIp"`
 	NetworkLayerDestinationIp    string             `bson:"NetworkLayerDestinationIp" json:"etworkLayerDestinationIp"`
 	NetworkLayerProtocol         string             `bson:"networkLayerProtocol" json:"networkLayerProtocol"`
@@ -56,21 +57,33 @@ func (p *EventProcessor) handleEvent(event *Event) {
 		panic(err)
 	}
 	if !isPrivate {
-		go func(ip string) {
-			if !p.ipProcessor.cache.inCache(ip) {
-				_, err := p.db.GetIpDataByIp(ip)
-				if err != nil {
-					time := time.Now().UTC().UnixMilli()
-					p.ipProcessor.cache.Set(srcIp, time, 0)
-					p.ipProcessor.events <- ipEvent{
-						Ip:        ip,
-						Timestamp: time,
-					}
+		cacheEvent := p.ipProcessor.cache.getIpEventFromLocalCache(srcIp)
+		if cacheEvent == nil {
+			detail, err := p.db.GetIpDataByIp(srcIp)
+			if err != nil {
+				id := primitive.NewObjectID()
+				event.Ip_id = id
+				cacheEvent = &ipEvent{
+					Id:        id,
+					Ip:        srcIp,
+					Timestamp: time.Now().UTC().UnixMilli(),
 				}
+				err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 0)
+				if err != nil {
+					panic(err)
+				}
+				go func(event ipEvent) {
+					p.ipProcessor.events <- event
+				}(*cacheEvent)
+			} else {
+				event.Ip_id = detail.Id
 			}
-		}(srcIp)
+		} else {
+			event.Ip_id = cacheEvent.Id
+		}
+	} else {
+		event.Ip_id = primitive.NewObjectID()
 	}
-
 	p.db.InsertIpEvent(event)
 }
 

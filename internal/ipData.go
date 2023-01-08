@@ -88,6 +88,7 @@ func (p *IpProcessor) processorLoop() {
 			response := p.processRequest(event.Ip)
 			if response == nil {
 				p.cache.Del(event.Ip)
+				return
 			}
 			if p.failureCount != 0 {
 				p.failureCount = 0
@@ -99,6 +100,7 @@ func (p *IpProcessor) processorLoop() {
 				p.counter = timeInterval
 			}
 			response.FirstSeen = event.Timestamp
+			response.Id = event.Id
 			err := p.db.InsertIpDetail(response)
 			if err != nil {
 				log.Fatal(err)

@@ -2,13 +2,14 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -26,6 +27,7 @@ type RedisClient struct {
 }
 
 type ipEvent struct {
+	Id        primitive.ObjectID
 	Ip        string
 	Timestamp int64
 }
@@ -60,18 +62,16 @@ func (r *RedisClient) loadCacheEntries() ([]ipEvent, error) {
 	defer cancel()
 	iter := r.client.Scan(ctx, 0, "", 0).Iterator()
 	for iter.Next(ctx) {
-		event := ipEvent{
-			Ip: iter.Val(),
-		}
-		timestampStr, err := r.Get(event.Ip)
+		var event ipEvent
+		event.Ip = iter.Val()
+		cacheEvent, err := r.Get(event.Ip)
 		if err != nil {
 			return nil, err
 		}
-		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		err = json.Unmarshal([]byte(cacheEvent), &event)
 		if err != nil {
 			return nil, err
 		}
-		event.Timestamp = timestamp
 		entries = append(entries, event)
 	}
 	if err := iter.Err(); err != nil {
@@ -84,6 +84,18 @@ func (r *RedisClient) inLocalCache(key string) bool {
 	defer r.mu.Unlock()
 	r.mu.Lock()
 	return r.cache[key] != nil
+}
+
+func (r *RedisClient) getIpEventFromLocalCache(key string) *ipEvent {
+	defer r.mu.Unlock()
+	r.mu.Lock()
+	entry := r.cache[key]
+	switch event := entry.(type) {
+	case ipEvent:
+		return &event
+	default:
+		return nil
+	}
 }
 
 func (r *RedisClient) addToLocalCache(key string, value interface{}) {
@@ -102,13 +114,12 @@ func (r *RedisClient) inCache(key string) bool {
 	if r.inLocalCache(key) {
 		return true
 	}
-	value, err := r.Get(key)
+	_, err := r.Get(key)
 	if err == redis.Nil {
 		return false
 	} else if err != nil {
 		panic(err)
 	}
-	r.addToLocalCache(key, value)
 	return true
 }
 
@@ -127,7 +138,11 @@ func (r *RedisClient) Get(key string) (string, error) {
 func (r *RedisClient) Set(key string, value interface{}, duration time.Duration) error {
 	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
 	defer cancel()
-	err := r.client.Set(ctx, key, value, duration).Err()
+	b, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	err = r.client.Set(ctx, key, b, duration).Err()
 	if err != nil {
 		return err
 	}

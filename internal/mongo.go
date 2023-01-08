@@ -50,12 +50,15 @@ func NewMongoClient() *Db {
 }
 
 func (db *Db) InsertIpDetail(data *IpDetail) error {
-	data.Id = primitive.NewObjectID()
+	if data.Id.IsZero() {
+		data.Id = primitive.NewObjectID()
+	}
 	_, err := db.ipData.InsertOne(context.TODO(), *data)
 	return err
 }
 
 func (db *Db) InsertIpEvent(data *Event) error {
+	fmt.Println(data.NetworkLayerSourceIp, data.Ip_id)
 	data.Id = primitive.NewObjectID()
 	_, err := db.ipHits.InsertOne(context.TODO(), *data)
 	return err
