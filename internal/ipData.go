@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,11 +47,10 @@ type IpDetail struct {
 	Languages          string             `bson:"languages" json:"languages"`
 	Asn                string             `bson:"asn" json:"asn"`
 	Org                string             `bson:"org" json:"org"`
-	Error              bool               `bson:"error" json:"error"`
-	Reason             string             `bson:"reason" json:"reason"`
-	Message            string             `bson:"message" json:"message"`
 	FirstSeen          int64              `bson:"first_seen" json:"first_seen"`
-	LastSeen           int64              `bson:"last_seen" json:"last_seen"`
+	Error              *bool
+	Reason             *string
+	Message            *string
 }
 
 func NewIpProcessor(db *Db) *IpProcessor {
@@ -101,6 +101,9 @@ func (p *IpProcessor) processorLoop() {
 			go func(event IpDetail) {
 				defer p.processorWg.Done()
 				response := p.processRequest(event)
+				if response == nil {
+					p.dequeue(event.Ip)
+				}
 				if p.failureCount != 0 {
 					p.failureCount = 0
 				}
@@ -130,6 +133,9 @@ func (p *IpProcessor) processRequest(ipObj IpDetail) *IpDetail {
 		for range t.C {
 			response, err := getIpInformation(ipObj)
 			if err != nil {
+				if strings.Contains(err.Error(), "Reserved IP Address") {
+					return nil
+				}
 				p.failureCount += 1
 				fmt.Printf("response error: %s, failure count %d, tick count: %f, queue count: %d, ip: %s\n",
 					err,

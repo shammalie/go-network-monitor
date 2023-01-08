@@ -3,7 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -13,21 +13,21 @@ func getIpInformation(obj IpDetail) (*IpDetail, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "ipapi.co/#go-v1.8")
+	req.Header.Set("User-Agent", "ipapi.co/#go-v1.19.4,github.com/shammalie/go-network-monitor")
 	resp, err := client.Do(req)
 	if err != nil && resp.StatusCode >= 400 {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	bytes, err := ioutil.ReadAll(resp.Body)
+	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(bytes, &obj); err != nil {
 		return nil, err
 	}
-	if obj.Error {
-		return nil, fmt.Errorf(fmt.Sprintf("reason: %s, message:%s", obj.Reason, obj.Message))
+	if obj.Error != nil {
+		return nil, fmt.Errorf(fmt.Sprintf("reason: %s, message:%s", *obj.Reason, *obj.Message))
 	}
 	return &obj, nil
 }

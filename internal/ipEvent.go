@@ -53,11 +53,15 @@ func NewEventProcessor(db *Db) *EventProcessor {
 
 func (p *EventProcessor) handleEvent(event *Event) {
 	srcIp := event.NetworkLayerSourceIp
-	if p.newIpProcessor.checkQueue(srcIp) && p.cache.getInMemoryQueue(srcIp) {
+	isPrivate, err := IsPrivateIP(srcIp)
+	if err != nil {
+		panic(err)
+	}
+	if !isPrivate && p.newIpProcessor.checkQueue(srcIp) && p.cache.getInMemoryQueue(srcIp) {
 		data, err := p.db.GetIpDataByIp(srcIp)
 		if err != nil {
-			fmt.Printf("new %s found\n", srcIp)
 			data.Ip = srcIp
+			data.FirstSeen = time.Now().UTC().UnixMilli()
 			p.newIpProcessor.enqueue(data)
 			p.newIpProcessor.ips <- data
 		}

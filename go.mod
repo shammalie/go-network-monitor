@@ -3,7 +3,6 @@ module github.com/shammalie/go-network-monitor
 go 1.19
 
 require (
-	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/spf13/viper v1.14.0
 	go.mongodb.org/mongo-driver v1.11.1
