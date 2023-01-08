@@ -98,6 +98,7 @@ func (p *IpProcessor) processorLoop() {
 			} else {
 				p.counter = timeInterval
 			}
+			response.FirstSeen = event.Timestamp
 			err := p.db.InsertIpDetail(response)
 			if err != nil {
 				log.Fatal(err)
