@@ -86,8 +86,8 @@ func (p *IpProcessor) enqueue(event *IpDetail) {
 }
 
 func (p *IpProcessor) dequeue(ip string) {
-	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.mu.Lock()
 	delete(p.queue, ip)
 }
 

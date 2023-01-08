@@ -17,7 +17,7 @@ func main() {
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(err)
+		fmt.Println("no env file found, will use environment")
 	}
 
 	db := internal.NewMongoClient()

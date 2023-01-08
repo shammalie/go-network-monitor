@@ -17,15 +17,19 @@ type EventProcessor struct {
 }
 
 type Event struct {
-	Id                          primitive.ObjectID `bson:"_id" json:"_id"`
-	NetworkLayerSourceIp        string             `bson:"networkLayerSourceIp" json:"networkLayerSourceIp"`
-	NetworkLayerDestinationIp   string             `bson:"NetworkLayerDestinationIp" json:"etworkLayerDestinationIp"`
-	NetworkLayerProtocol        string             `bson:"networkLayerProtocol" json:"networkLayerProtocol"`
-	TransportLayerSourceIp      string             `bson:"transportLayerSourceIp" json:"transportLayerSourceIp"`
-	TransportLayerDestinationIp string             `bson:"transportLayerDestinationIp" json:"transportLayeDestinationIp"`
-	TransportLayerProtocol      string             `bson:"transportLayerProtocol" json:"transportLayerProtocol"`
-	ApplicationLayerProtocol    string             `bson:"applicationLayerProtocol" json:"applicationLayerProtocol"`
-	ApplicationLayerPayload     []byte             `bson:"applicationLayerPayload" json:"applicationLayerPayload"`
+	Id                           primitive.ObjectID `bson:"_id" json:"_id"`
+	NetworkLayerSourceIp         string             `bson:"networkLayerSourceIp" json:"networkLayerSourceIp"`
+	NetworkLayerDestinationIp    string             `bson:"NetworkLayerDestinationIp" json:"etworkLayerDestinationIp"`
+	NetworkLayerProtocol         string             `bson:"networkLayerProtocol" json:"networkLayerProtocol"`
+	TransportLayerSourceIp       string             `bson:"transportLayerSourceIp" json:"transportLayerSourceIp"`
+	TransportLayerDestinationIp  string             `bson:"transportLayerDestinationIp" json:"transportLayeDestinationIp"`
+	TransportLayerProtocol       string             `bson:"transportLayerProtocol" json:"transportLayerProtocol"`
+	ApplicationLayerProtocol     string             `bson:"applicationLayerProtocol" json:"applicationLayerProtocol"`
+	ApplicationLayerPayload      []byte             `bson:"applicationLayerPayload" json:"applicationLayerPayload"`
+	MetadataCaptureLength        int64              `bson:"metadataCaptureLength" json:"metadataCaptureLength"`
+	MetadataOriginalPacketLength int64              `bson:"metadataOriginalPacketLength" json:"metadataOriginalPacketLength"`
+	MetadataTimestamp            int64              `bson:"metadataTimestamp" json:"metadataTimestamp"`
+	MetadataTruncated            bool               `bson:"metadataTruncated" json:"metadataTruncated"`
 }
 
 func NewEventProcessor(db *Db) *EventProcessor {
@@ -78,6 +82,10 @@ func (p *EventProcessor) convertEvent(e *network_capture_v1.NetworkCaptureReques
 	if err != nil {
 		fmt.Println(err)
 	}
+	err = event.handleLayer(*e.Metadata)
+	if err != nil {
+		fmt.Println(err)
+	}
 	return event
 }
 
@@ -100,6 +108,11 @@ func (e *Event) handleLayer(layer interface{}) error {
 		}
 		e.TransportLayerSourceIp = layer.SrcPort
 		e.TransportLayerDestinationIp = layer.DstPort
+	case network_capture_v1.Metadata:
+		e.MetadataCaptureLength = layer.OriginalPacketLength
+		e.MetadataOriginalPacketLength = layer.OriginalPacketLength
+		e.MetadataTimestamp = layer.Timestamp
+		e.MetadataTruncated = layer.Truncated
 	default:
 		return fmt.Errorf("provided layer is not of the supported types")
 	}
