@@ -51,25 +51,25 @@ func NewEventProcessor(db *Db) *EventProcessor {
 
 func (p *EventProcessor) handleEvent(event *Event) {
 	srcIp := event.NetworkLayerSourceIp
-
-	go func(ip string) {
-		isPrivate, err := IsPrivateIP(ip)
-		if err != nil {
-			panic(err)
-		}
-
-		if !isPrivate && !p.ipProcessor.cache.inCache(ip) {
-			_, err := p.db.GetIpDataByIp(ip)
-			if err != nil {
-				time := time.Now().UTC().UnixMilli()
-				p.ipProcessor.cache.Set(srcIp, time, 0)
-				p.ipProcessor.events <- ipEvent{
-					Ip:        ip,
-					Timestamp: time,
+	isPrivate, err := IsPrivateIP(srcIp)
+	if err != nil {
+		panic(err)
+	}
+	if !isPrivate {
+		go func(ip string) {
+			if !p.ipProcessor.cache.inCache(ip) {
+				_, err := p.db.GetIpDataByIp(ip)
+				if err != nil {
+					time := time.Now().UTC().UnixMilli()
+					p.ipProcessor.cache.Set(srcIp, time, 0)
+					p.ipProcessor.events <- ipEvent{
+						Ip:        ip,
+						Timestamp: time,
+					}
 				}
 			}
-		}
-	}(srcIp)
+		}(srcIp)
+	}
 
 	p.db.InsertIpEvent(event)
 }

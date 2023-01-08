@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -20,6 +21,8 @@ const (
 type RedisClient struct {
 	client  *redis.Client
 	ctxTime int
+	cache   map[string]interface{}
+	mu      sync.Mutex
 }
 
 type ipEvent struct {
@@ -41,6 +44,7 @@ func NewRedisClient(ctxTimeSeconds int) *RedisClient {
 	rdb := &RedisClient{
 		client:  redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}),
 		ctxTime: ctxTimeSeconds,
+		cache:   make(map[string]interface{}, 1000),
 	}
 	fmt.Println("loaded redis client")
 	return rdb
@@ -76,13 +80,35 @@ func (r *RedisClient) loadCacheEntries() ([]ipEvent, error) {
 	return entries, nil
 }
 
+func (r *RedisClient) inLocalCache(key string) bool {
+	defer r.mu.Unlock()
+	r.mu.Lock()
+	return r.cache[key] != nil
+}
+
+func (r *RedisClient) addToLocalCache(key string, value interface{}) {
+	defer r.mu.Unlock()
+	r.mu.Lock()
+	r.cache[key] = value
+}
+
+func (r *RedisClient) removeFromLocalCache(key string) {
+	defer r.mu.Unlock()
+	r.mu.Lock()
+	delete(r.cache, key)
+}
+
 func (r *RedisClient) inCache(key string) bool {
-	_, err := r.Get(key)
+	if r.inLocalCache(key) {
+		return true
+	}
+	value, err := r.Get(key)
 	if err == redis.Nil {
 		return false
 	} else if err != nil {
 		panic(err)
 	}
+	r.addToLocalCache(key, value)
 	return true
 }
 
@@ -105,6 +131,7 @@ func (r *RedisClient) Set(key string, value interface{}, duration time.Duration)
 	if err != nil {
 		return err
 	}
+	r.addToLocalCache(key, value)
 	return nil
 }
 
@@ -115,5 +142,6 @@ func (r *RedisClient) Del(key string) error {
 	if err != nil {
 		return err
 	}
+	r.removeFromLocalCache(key)
 	return nil
 }
