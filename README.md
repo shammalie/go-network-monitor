@@ -1,5 +1,7 @@
 # go-network-monitor
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/shammalie/go-network-monitor)](https://goreportcard.com/report/github.com/shammalie/go-network-monitor)
+
 A server that receives pcap events via
 [go-network-monitor-client](https://github.com/shammalie/go-network-monitor-client).
 Client events are sent to the server for processing and collection:

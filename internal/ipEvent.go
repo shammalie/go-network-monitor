@@ -72,7 +72,7 @@ func (p *EventProcessor) handleEvent(event *Event) {
 				Ip:        srcIp,
 				Timestamp: time.Now().UTC().UnixMilli(),
 			}
-			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 0)
+			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 12*time.Hour)
 			if err != nil {
 				panic(err)
 			}
