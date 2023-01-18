@@ -5,12 +5,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	network_capture_v1 "github.com/shammalie/go-network-monitor/pkg/network_capture.v1"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type EventProcessor struct {
 	Events      chan *network_capture_v1.NetworkCaptureRequest
+	saveEvents  bool
 	db          *Db
 	ipProcessor *IpProcessor
 }
@@ -34,8 +37,10 @@ type Event struct {
 
 func NewEventProcessor(db *Db) *EventProcessor {
 	var wg sync.WaitGroup
+	recEvents := viper.GetBool("RECORD_IP_EVENTS")
 	processor := &EventProcessor{
 		Events:      make(chan *network_capture_v1.NetworkCaptureRequest),
+		saveEvents:  recEvents,
 		db:          db,
 		ipProcessor: NewIpProcessor(db),
 	}
@@ -61,8 +66,8 @@ func (p *EventProcessor) handleEvent(event *Event) {
 		p.db.InsertIpEvent(event)
 		return
 	}
-	cacheEvent := p.ipProcessor.cache.getIpEventFromLocalCache(srcIp)
-	if cacheEvent == nil {
+	cacheEvent, err := p.ipProcessor.cache.Get(srcIp)
+	if err == redis.Nil && cacheEvent == nil {
 		detail, err := p.db.GetIpDataByIp(srcIp)
 		if err != nil {
 			id := primitive.NewObjectID()
@@ -72,7 +77,7 @@ func (p *EventProcessor) handleEvent(event *Event) {
 				Ip:        srcIp,
 				Timestamp: time.Now().UTC().UnixMilli(),
 			}
-			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent, 12*time.Hour)
+			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent)
 			if err != nil {
 				panic(err)
 			}
@@ -85,7 +90,9 @@ func (p *EventProcessor) handleEvent(event *Event) {
 	} else {
 		event.Ip_id = cacheEvent.Id
 	}
-	p.db.InsertIpEvent(event)
+	if p.saveEvents {
+		p.db.InsertIpEvent(event)
+	}
 }
 
 func (p *EventProcessor) convertEvent(e *network_capture_v1.NetworkCaptureRequest) *Event {

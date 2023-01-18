@@ -62,14 +62,16 @@ func NewIpProcessor(db *Db) *IpProcessor {
 		StopProcessing: make(chan bool),
 		db:             db,
 		cache:          NewRedisClient(5),
-		events:         make(chan ipEvent, 1000),
+		events:         make(chan ipEvent),
 	}
 	entries, err := processor.cache.loadCacheEntries()
 	if err != nil {
 		panic(err)
 	}
 	for _, e := range entries {
-		processor.events <- e
+		go func(event ipEvent) {
+			processor.events <- event
+		}(e)
 	}
 	wg.Add(1)
 	go func() {
@@ -127,7 +129,7 @@ func (p *IpProcessor) processRequest(ip string) *IpDetail {
 					err,
 					p.failureCount,
 					p.counter,
-					len(p.events),
+					p.cache.size,
 					ip)
 				if p.failureCount > requestCountLimit && p.counter != 3600 {
 					fmt.Println("extending tick period")

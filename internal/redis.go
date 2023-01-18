@@ -20,10 +20,11 @@ const (
 )
 
 type RedisClient struct {
-	client  *redis.Client
-	ctxTime int
-	cache   map[string]interface{}
-	mu      sync.Mutex
+	client    *redis.Client
+	ctxTime   int
+	size      int64
+	mu        sync.Mutex
+	warmCache *Cache
 }
 
 type ipEvent struct {
@@ -44,9 +45,9 @@ func NewRedisClient(ctxTimeSeconds int) *RedisClient {
 	password := viper.GetString(redisPassword)
 	db := viper.GetInt(redisDb)
 	rdb := &RedisClient{
-		client:  redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}),
-		ctxTime: ctxTimeSeconds,
-		cache:   make(map[string]interface{}, 1000),
+		client:    redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db}),
+		ctxTime:   ctxTimeSeconds,
+		warmCache: NewLocalCache(5 * time.Second),
 	}
 	fmt.Println("loaded redis client")
 	return rdb
@@ -58,95 +59,75 @@ func getTimeoutContext(duration time.Duration) (context.Context, context.CancelF
 
 func (r *RedisClient) loadCacheEntries() ([]ipEvent, error) {
 	var entries []ipEvent
-	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
-	defer cancel()
+	ctx := context.Background()
 	iter := r.client.Scan(ctx, 0, "", 0).Iterator()
 	for iter.Next(ctx) {
-		var event ipEvent
-		event.Ip = iter.Val()
-		cacheEvent, err := r.Get(event.Ip)
+		ip := iter.Val()
+		cacheEvent, err := r.Get(ip)
 		if err != nil {
 			return nil, err
 		}
-		err = json.Unmarshal([]byte(cacheEvent), &event)
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, event)
+		entries = append(entries, *cacheEvent)
 	}
 	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	err := r.getDbSize()
+	if err != nil {
 		return nil, err
 	}
 	return entries, nil
 }
 
-func (r *RedisClient) inLocalCache(key string) bool {
+func (r *RedisClient) getDbSize() error {
 	defer r.mu.Unlock()
-	r.mu.Lock()
-	return r.cache[key] != nil
-}
-
-func (r *RedisClient) getIpEventFromLocalCache(key string) *ipEvent {
-	defer r.mu.Unlock()
-	r.mu.Lock()
-	entry := r.cache[key]
-	switch event := entry.(type) {
-	case ipEvent:
-		return &event
-	default:
-		return nil
+	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
+	defer cancel()
+	size, err := r.client.DBSize(ctx).Result()
+	if err != nil {
+		return err
 	}
-}
-
-func (r *RedisClient) addToLocalCache(key string, value interface{}) {
-	defer r.mu.Unlock()
 	r.mu.Lock()
-	r.cache[key] = value
+	r.size = size
+	return nil
 }
 
-func (r *RedisClient) removeFromLocalCache(key string) {
-	defer r.mu.Unlock()
-	r.mu.Lock()
-	delete(r.cache, key)
-}
-
-func (r *RedisClient) inCache(key string) bool {
-	if r.inLocalCache(key) {
-		return true
+func (r *RedisClient) Get(key string) (*ipEvent, error) {
+	if event, found := r.warmCache.Get(key); found {
+		return event, nil
 	}
-	_, err := r.Get(key)
-	if err == redis.Nil {
-		return false
-	} else if err != nil {
-		panic(err)
-	}
-	return true
-}
-
-func (r *RedisClient) Get(key string) (string, error) {
 	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
 	defer cancel()
 	val, err := r.client.Get(ctx, key).Result()
 	if err == redis.Nil {
-		return "", err
+		return nil, err
 	} else if err != nil {
 		panic(err)
 	}
-	return val, nil
+	var event ipEvent
+	err = json.Unmarshal([]byte(val), &event)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
 }
 
-func (r *RedisClient) Set(key string, value interface{}, duration time.Duration) error {
+func (r *RedisClient) Set(key string, value interface{}) error {
+	r.warmCache.Set(value)
 	ctx, cancel := getTimeoutContext(time.Duration(r.ctxTime) * time.Second)
 	defer cancel()
 	b, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	err = r.client.Set(ctx, key, b, duration).Err()
+	err = r.client.Set(ctx, key, b, 6*time.Hour).Err()
 	if err != nil {
 		return err
 	}
-	r.addToLocalCache(key, value)
+	err = r.getDbSize()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -157,6 +138,9 @@ func (r *RedisClient) Del(key string) error {
 	if err != nil {
 		return err
 	}
-	r.removeFromLocalCache(key)
+	err = r.getDbSize()
+	if err != nil {
+		return err
+	}
 	return nil
 }
