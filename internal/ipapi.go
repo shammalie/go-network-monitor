@@ -16,7 +16,7 @@ func getIpInformation(ip string) (*IpDetail, error) {
 	}
 	req.Header.Set("User-Agent", "ipapi.co/#go-v1.19.4")
 	resp, err := client.Do(req)
-	if err != nil && resp.StatusCode >= 400 {
+	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
