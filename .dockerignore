@@ -1,0 +1,9 @@
+*.env
+environments
+*workspace
+build
+protos
+.gitignore
+buf*
+Makefile
+Readme.md

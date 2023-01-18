@@ -1,0 +1,16 @@
+version: "3.7"
+services:
+  network-service:
+    image: shammalie/go-network-service:0.0.1
+    container_name: go-network-service
+    ports:
+      - 127.0.0.1:5721:5721
+    environment:
+      - IP_IGNORE=list-of-whitelist-ips
+      - SERVER_PORT=-server-port
+      - MONGO_HOST=mongo-host
+      - MONGO_USERNAME=mongo-username
+      - MONGO_PASSWORD=mongo-password
+      - MONGO_PORT=mongo-port
+      - REDIS_URL=redis-url
+      - REDIS_PASSWORD=redis-password
