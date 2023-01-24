@@ -2,8 +2,6 @@ package internal
 
 import (
 	"fmt"
-	"log"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -12,16 +10,18 @@ import (
 )
 
 const (
-	requestCountLimit = 20
+	requestCountLimit = 8
+	openStatus        = "OPEN"
+	rateLimitedStatus = "RATE_LIMITED"
 )
 
+var rateLimitTimeMs = 3600000
+
 type IpProcessor struct {
-	failureCount   int
-	counter        float64
-	StopProcessing chan bool
-	db             *Db
-	cache          *RedisClient
-	events         chan ipEvent
+	status   string
+	incoming chan string
+	outgoing chan *IpDetail
+	mu       sync.Mutex
 }
 
 type IpDetail struct {
@@ -54,92 +54,73 @@ type IpDetail struct {
 	Message            *string
 }
 
-func NewIpProcessor(db *Db) *IpProcessor {
+func NewIpProcessor() *IpProcessor {
 	var wg sync.WaitGroup
 	processor := &IpProcessor{
-		failureCount:   0,
-		counter:        1,
-		StopProcessing: make(chan bool),
-		db:             db,
-		cache:          NewRedisClient(5),
-		events:         make(chan ipEvent),
-	}
-	entries, err := processor.cache.loadCacheEntries()
-	if err != nil {
-		panic(err)
-	}
-	for _, e := range entries {
-		go func(event ipEvent) {
-			processor.events <- event
-		}(e)
+		status:   "OPEN",
+		incoming: make(chan string),
+		outgoing: make(chan *IpDetail),
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		processor.processorLoop()
+		for ip := range processor.incoming {
+			processor.ipProcessor(ip)
+		}
 	}()
-	fmt.Println("started IP lookup processor")
 	return processor
 }
 
-func (p *IpProcessor) processorLoop() {
-	defer close(p.StopProcessing)
-	for {
-		select {
-		case event := <-p.events:
-			response := p.processRequest(event.Ip)
-			if response == nil {
-				p.cache.Del(event.Ip)
-				return
-			}
-			if p.failureCount != 0 {
-				p.failureCount = 0
-			}
-			timeInterval := math.Floor(float64(p.counter) / 2)
-			if timeInterval <= 0 || timeInterval > 32 {
-				p.counter = 1
-			} else {
-				p.counter = timeInterval
-			}
-			response.FirstSeen = event.Timestamp
-			response.Id = event.Id
-			err := p.db.InsertIpDetail(response)
-			if err != nil {
-				log.Fatal(err)
-			}
-			p.cache.Del(response.Ip)
-			fmt.Printf("processed new ip %s\n", response.Ip)
-		case <-p.StopProcessing:
-			return
-		}
-	}
+func (p *IpProcessor) isRateLimited() bool {
+	defer p.mu.Unlock()
+	p.mu.Lock()
+	return p.status == rateLimitedStatus
 }
 
-func (p *IpProcessor) processRequest(ip string) *IpDetail {
+func (p *IpProcessor) Add(ip string) error {
+	if p.isRateLimited() {
+		return fmt.Errorf("processor currently rate limited, not accepting new requests")
+	}
+	go func() {
+		p.incoming <- ip
+	}()
+	return nil
+}
+
+func (p *IpProcessor) ipProcessor(ip string) {
+	var failCount int
+	counterMs := 500
 	for {
-		t := time.NewTicker(time.Duration(p.counter) * time.Second)
+		p.mu.Lock()
+		t := time.NewTicker(time.Duration(counterMs) * time.Millisecond)
 		for range t.C {
 			response, err := getIpInformation(ip)
 			if err != nil {
 				if strings.Contains(err.Error(), "Reserved IP Address") {
-					return nil
+					return
 				}
-				p.failureCount += 1
-				fmt.Printf("response error: %s, failure count %d, tick count: %f, queue count: %d, ip: %s\n",
+				failCount += 1
+				fmt.Printf("response error: %s, failure count %d, tick count ms: %d, ip: %s\n",
 					err,
-					p.failureCount,
-					p.counter,
-					p.cache.size,
+					failCount,
+					counterMs,
 					ip)
-				if p.failureCount > requestCountLimit && p.counter != 3600 {
+				p.status = rateLimitedStatus
+				if failCount >= requestCountLimit && counterMs != rateLimitTimeMs {
 					fmt.Println("extending tick period")
-					p.counter = 3600
-				} else if p.counter < 32 {
-					p.counter += p.counter
+					counterMs = rateLimitTimeMs
+				} else if failCount < requestCountLimit {
+					counterMs += counterMs
 				}
 				break
 			}
-			return response
+			if p.status == rateLimitedStatus {
+				p.status = openStatus
+			}
+			p.outgoing <- response
+			p.mu.Unlock()
+			return
 		}
+		p.mu.Unlock()
 	}
 }

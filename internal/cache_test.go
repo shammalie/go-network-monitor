@@ -17,11 +17,7 @@ func TestNewLocalCache(t *testing.T) {
 
 func TestCache_cleanup(t *testing.T) {
 	cache := NewLocalCache(1 * time.Millisecond)
-	cache.Set(&ipEvent{
-		Id:        [12]byte{},
-		Ip:        "127.0.0.1",
-		Timestamp: 0,
-	})
+	cache.Set("127.0.0.1")
 	time.Sleep(100 * time.Millisecond)
 
 	if len(cache.queue) != 0 {
@@ -32,11 +28,7 @@ func TestCache_cleanup(t *testing.T) {
 func TestCache_getQueueSize(t *testing.T) {
 	cache := NewLocalCache(10 * time.Second)
 	for i := 0; i < 5; i++ {
-		cache.Set(&ipEvent{
-			Id:        [12]byte{},
-			Ip:        fmt.Sprintf("127.0.0.%d", i+1),
-			Timestamp: 0,
-		})
+		cache.Set(fmt.Sprintf("127.0.0.%d", i+1))
 	}
 	if len(cache.queue) != 5 {
 		t.Errorf("cache size should be 5")
@@ -46,24 +38,16 @@ func TestCache_getQueueSize(t *testing.T) {
 func TestCache_Get(t *testing.T) {
 	ip := "127.0.0.1"
 	cache := NewLocalCache(10 * time.Second)
-	cache.Set(&ipEvent{
-		Id:        [12]byte{},
-		Ip:        ip,
-		Timestamp: 0,
-	})
-	event, found := cache.Get(ip)
-	if !found || event.Ip != ip {
-		t.Errorf("get should return the event with defined ip")
+	cache.Set(ip)
+	element, found := cache.Get(ip)
+	if !found || *element != ip {
+		t.Errorf("the ip should match")
 	}
 }
 
 func TestCache_Set(t *testing.T) {
 	cache := NewLocalCache(10 * time.Second)
-	cache.Set(&ipEvent{
-		Id:        [12]byte{},
-		Ip:        "127.0.0.1",
-		Timestamp: 0,
-	})
+	cache.Set("127.0.0.1")
 	if len(cache.queue) != 1 {
 		t.Errorf("event should of been set in queue, length should return 1")
 	}
@@ -75,11 +59,7 @@ func BenchmarkCache(b *testing.B) {
 	b.ResetTimer()
 	b.Run("Set", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			cache.Set(&ipEvent{
-				Id:        [12]byte{},
-				Ip:        ip,
-				Timestamp: 0,
-			})
+			cache.Set(ip)
 		}
 	})
 	b.Run("Get", func(b *testing.B) {

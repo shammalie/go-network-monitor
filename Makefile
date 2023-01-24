@@ -9,3 +9,6 @@ build-binary:
 
 build-docker:
 	docker build -f build/docker/Dockerfile -t shammalie/go-network-service:0.0.1 .
+
+buf-generate:
+	buf generate

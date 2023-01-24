@@ -1,0 +1,62 @@
+// https://dev.bitolog.com/grpc-long-lived-streaming/
+syntax = "proto3";
+
+option go_package = "ip_data.v1";
+package ip_data.v1;
+
+service LookupService {
+    rpc BroadcastBearerStatus(BearerStatusRequest) returns (BearerStatusResponse) {}
+    rpc Lookup(LookupRequest) returns (LookupResponse) {}
+}
+
+message BearerIdentity {
+    string id = 1;
+    string ip = 2;
+    string hostname = 3;
+    string apiKey = 4;
+}
+
+message BearerStatusResponse {}
+
+message BearerStatusRequest {
+    BearerIdentity bearerIdentity = 1;
+    BearerStatus bearerStatus = 2;
+    enum BearerStatus {
+        AVAILABLE = 0;
+        UNAVAILABLE = 1;
+        RATE_LIMITED = 2;
+    }
+}
+
+message LookupRequest {
+    string ip = 1;
+    string bearerId = 2;
+}
+
+message LookupResponse {
+    string ip = 1;
+    string city = 2;
+    string region = 3;
+    string regionCode = 4;
+    string countryCode = 5;
+    string countryCodeIso3 = 6; 
+    string countryName = 7;
+    string countryCapital = 8;
+    string countryTld = 9;
+    string continentCode = 10;
+    bool inEu = 11;
+    string postal = 12; 
+    float latitude = 13;
+    float longitude = 14;
+    string timezone = 15;
+    string utcOffset = 16;
+    string countryCallingCode = 17;
+    string currency = 18;
+    string currencyName = 19;
+    string languages = 20;
+    string asn = 21;
+    string org = 22;
+    string error = 23;
+    string reason = 24;
+    string message = 25;
+}

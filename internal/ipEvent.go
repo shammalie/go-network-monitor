@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	network_capture_v1 "github.com/shammalie/go-network-monitor/pkg/network_capture.v1"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -15,6 +14,7 @@ type EventProcessor struct {
 	Events      chan *network_capture_v1.NetworkCaptureRequest
 	saveEvents  bool
 	db          *Db
+	warmCache   *Cache
 	ipProcessor *IpProcessor
 }
 
@@ -42,7 +42,8 @@ func NewEventProcessor(db *Db) *EventProcessor {
 		Events:      make(chan *network_capture_v1.NetworkCaptureRequest),
 		saveEvents:  recEvents,
 		db:          db,
-		ipProcessor: NewIpProcessor(db),
+		warmCache:   NewLocalCache(5 * time.Second),
+		ipProcessor: NewIpProcessor(),
 	}
 	wg.Add(1)
 	go func() {
@@ -51,47 +52,41 @@ func NewEventProcessor(db *Db) *EventProcessor {
 			processor.handleEvent(processor.convertEvent(event))
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for ipDetail := range processor.ipProcessor.outgoing {
+			err := db.InsertIpDetail(ipDetail)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Printf("processed %s\n", ipDetail.Ip)
+		}
+	}()
 	fmt.Println("started event processor")
 	return processor
 }
 
 func (p *EventProcessor) handleEvent(event *Event) {
 	srcIp := event.NetworkLayerSourceIp
-	isPrivate, err := IsPrivateIP(srcIp)
+	isPrivate, err := PrivateIpCheck(srcIp)
 	if err != nil {
 		panic(err)
 	}
 	if isPrivate {
-		event.Ip_id = primitive.NewObjectID()
-		p.db.InsertIpEvent(event)
 		return
 	}
-	cacheEvent, err := p.ipProcessor.cache.Get(srcIp)
-	if err == redis.Nil && cacheEvent == nil {
-		detail, err := p.db.GetIpDataByIp(srcIp)
+	_, found := p.warmCache.Get(srcIp)
+	if !found {
+		_, err := p.db.GetIpDataByIp(srcIp)
 		if err != nil {
-			id := primitive.NewObjectID()
-			event.Ip_id = id
-			cacheEvent = &ipEvent{
-				Id:        id,
-				Ip:        srcIp,
-				Timestamp: time.Now().UTC().UnixMilli(),
-			}
-			err := p.ipProcessor.cache.Set(srcIp, *cacheEvent)
+			err := p.ipProcessor.Add(srcIp)
 			if err != nil {
-				panic(err)
+				fmt.Println(err)
+				return
 			}
-			go func(event ipEvent) {
-				p.ipProcessor.events <- event
-			}(*cacheEvent)
-		} else {
-			event.Ip_id = detail.Id
+			p.warmCache.Set(srcIp)
 		}
-	} else {
-		event.Ip_id = cacheEvent.Id
-	}
-	if p.saveEvents {
-		p.db.InsertIpEvent(event)
 	}
 }
 

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 func getIpInformation(ip string) (*IpDetail, error) {
+	firstSeen := time.Now().UTC().UnixMilli()
 	var obj *IpDetail
 	client := http.Client{}
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://ipapi.co/%s/json/", ip), nil)
@@ -30,5 +32,6 @@ func getIpInformation(ip string) (*IpDetail, error) {
 	if obj.Error != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("reason: %s, message:%s", *obj.Reason, *obj.Message))
 	}
+	obj.FirstSeen = firstSeen
 	return obj, nil
 }

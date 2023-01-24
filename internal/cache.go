@@ -13,7 +13,7 @@ type Cache struct {
 
 type Element struct {
 	expireAt int64
-	event    *ipEvent
+	ip       *string
 }
 
 func NewLocalCache(timeToLive time.Duration) *Cache {
@@ -51,11 +51,11 @@ func (c *Cache) getQueueSize() int {
 	return len(c.queue)
 }
 
-func (c *Cache) Get(key string) (*ipEvent, bool) {
+func (c *Cache) Get(key string) (*string, bool) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
 	if element := c.queue[key]; element != nil {
-		return element.event, true
+		return element.ip, true
 	}
 	return nil, false
 }
@@ -63,11 +63,11 @@ func (c *Cache) Get(key string) (*ipEvent, bool) {
 func (c *Cache) Set(value interface{}) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
-	switch event := value.(type) {
-	case ipEvent:
-		c.queue[event.Ip] = &Element{
+	switch ip := value.(type) {
+	case string:
+		c.queue[ip] = &Element{
 			expireAt: time.Now().UTC().Add(c.timeToLive).UnixMilli(),
-			event:    &event,
+			ip:       &ip,
 		}
 	}
 }
