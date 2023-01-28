@@ -49,7 +49,7 @@ func NewEventProcessor(db *Db) *EventProcessor {
 	go func() {
 		defer wg.Done()
 		for event := range processor.Events {
-			processor.handleEvent(processor.convertEvent(event))
+			processor.handleEvent(event)
 		}
 	}()
 	wg.Add(1)
@@ -67,8 +67,9 @@ func NewEventProcessor(db *Db) *EventProcessor {
 	return processor
 }
 
-func (p *EventProcessor) handleEvent(event *Event) {
-	srcIp := event.NetworkLayerSourceIp
+func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureRequest) {
+	processedEvent := p.convertEvent(event)
+	srcIp := processedEvent.NetworkLayerSourceIp
 	isPrivate, err := PrivateIpCheck(srcIp)
 	if err != nil {
 		panic(err)

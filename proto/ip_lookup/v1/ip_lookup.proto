@@ -1,8 +1,8 @@
 // https://dev.bitolog.com/grpc-long-lived-streaming/
 syntax = "proto3";
 
-option go_package = "ip_data.v1";
-package ip_data.v1;
+option go_package = "ip_lookup.v1";
+package ip_lookup.v1;
 
 service LookupService {
     rpc BroadcastBearerStatus(BearerStatusRequest) returns (BearerStatusResponse) {}
@@ -16,9 +16,9 @@ message BearerIdentity {
     string apiKey = 4;
 }
 
-message BearerStatusResponse {}
+message BearerStatusRequest {}
 
-message BearerStatusRequest {
+message BearerStatusResponse {
     BearerIdentity bearerIdentity = 1;
     BearerStatus bearerStatus = 2;
     enum BearerStatus {
@@ -27,6 +27,7 @@ message BearerStatusRequest {
         RATE_LIMITED = 2;
     }
 }
+
 
 message LookupRequest {
     string ip = 1;
