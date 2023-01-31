@@ -5,14 +5,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 )
 
-func getIpInformation(ip string) (*IpDetail, error) {
-	firstSeen := time.Now().UTC().UnixMilli()
+func verifyIPEvent(event IpDetail) error {
+	if event.Ip == "" {
+		return fmt.Errorf("ip is empty")
+	}
+	if event.Id.IsZero() {
+		return fmt.Errorf("primitive id is zero")
+	}
+	if event.FirstSeen == 0 {
+		return fmt.Errorf("no timestamp provided for event")
+	}
+	return nil
+}
+
+func getIpInformation(event IpDetail) (*IpDetail, error) {
+	if err := verifyIPEvent(event); err != nil {
+		return nil, err
+	}
 	var obj *IpDetail
 	client := http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://ipapi.co/%s/json/", ip), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://ipapi.co/%s/json/", event.Ip), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +46,7 @@ func getIpInformation(ip string) (*IpDetail, error) {
 	if obj.Error != nil {
 		return nil, fmt.Errorf(fmt.Sprintf("reason: %s, message:%s", *obj.Reason, *obj.Message))
 	}
-	obj.FirstSeen = firstSeen
+	obj.Id = event.Id
+	obj.FirstSeen = event.FirstSeen
 	return obj, nil
 }

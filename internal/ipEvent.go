@@ -68,6 +68,10 @@ func NewEventProcessor(db *Db) *EventProcessor {
 }
 
 func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureRequest) {
+	if p.ipProcessor.isRateLimited() {
+		fmt.Println("processor currently rate limited, not accepting new requests")
+		return
+	}
 	processedEvent := p.convertEvent(event)
 	srcIp := processedEvent.NetworkLayerSourceIp
 	isPrivate, err := PrivateIpCheck(srcIp)
@@ -77,18 +81,33 @@ func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureReq
 	if isPrivate {
 		return
 	}
-	_, found := p.warmCache.Get(srcIp)
+	var existingId primitive.ObjectID
+	cacheElement, found := p.warmCache.Get(srcIp)
 	if !found {
-		_, err := p.db.GetIpDataByIp(srcIp)
+		d, err := p.db.GetIpDataByIp(srcIp)
 		if err != nil {
-			err := p.ipProcessor.Add(srcIp)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			p.warmCache.Set(srcIp)
+			id := primitive.NewObjectID()
+			go func() {
+				p.ipProcessor.incoming <- IpDetail{
+					Id:        id,
+					Ip:        srcIp,
+					FirstSeen: time.Now().UTC().UnixMilli(),
+				}
+			}()
+			p.warmCache.Set(Element{
+				id: id,
+				ip: srcIp,
+			})
+			existingId = id
+		} else {
+			existingId = d.Id
 		}
+	} else {
+		existingId = cacheElement.id
 	}
+	convEvent := p.convertEvent(event)
+	convEvent.Ip_id = existingId
+	p.db.InsertIpEvent(convEvent)
 }
 
 func (p *EventProcessor) convertEvent(e *network_capture_v1.NetworkCaptureRequest) *Event {

@@ -19,7 +19,7 @@ var rateLimitTimeMs = 3600000
 
 type IpProcessor struct {
 	status   string
-	incoming chan string
+	incoming chan IpDetail
 	outgoing chan *IpDetail
 	mu       sync.Mutex
 }
@@ -58,7 +58,7 @@ func NewIpProcessor() *IpProcessor {
 	var wg sync.WaitGroup
 	processor := &IpProcessor{
 		status:   "OPEN",
-		incoming: make(chan string),
+		incoming: make(chan IpDetail),
 		outgoing: make(chan *IpDetail),
 	}
 	wg.Add(1)
@@ -77,24 +77,23 @@ func (p *IpProcessor) isRateLimited() bool {
 	return p.status == rateLimitedStatus
 }
 
-func (p *IpProcessor) Add(ip string) error {
-	if p.isRateLimited() {
-		return fmt.Errorf("processor currently rate limited, not accepting new requests")
+func (p *IpProcessor) setStatus(status string) error {
+	if strings.EqualFold(status, openStatus) || strings.EqualFold(status, rateLimitedStatus) {
+		return fmt.Errorf("provided state is not valid")
 	}
-	go func() {
-		p.incoming <- ip
-	}()
+	defer p.mu.Unlock()
+	p.mu.Lock()
+	p.status = status
 	return nil
 }
 
-func (p *IpProcessor) ipProcessor(ip string) {
+func (p *IpProcessor) ipProcessor(event IpDetail) {
 	var failCount int
 	counterMs := 500
 	for {
-		p.mu.Lock()
 		t := time.NewTicker(time.Duration(counterMs) * time.Millisecond)
 		for range t.C {
-			response, err := getIpInformation(ip)
+			response, err := getIpInformation(event)
 			if err != nil {
 				if strings.Contains(err.Error(), "Reserved IP Address") {
 					return
@@ -104,8 +103,10 @@ func (p *IpProcessor) ipProcessor(ip string) {
 					err,
 					failCount,
 					counterMs,
-					ip)
-				p.status = rateLimitedStatus
+					event.Ip)
+				if !p.isRateLimited() {
+					p.setStatus(rateLimitedStatus)
+				}
 				if failCount >= requestCountLimit && counterMs != rateLimitTimeMs {
 					fmt.Println("extending tick period")
 					counterMs = rateLimitTimeMs
@@ -114,11 +115,10 @@ func (p *IpProcessor) ipProcessor(ip string) {
 				}
 				break
 			}
-			if p.status == rateLimitedStatus {
-				p.status = openStatus
+			if p.isRateLimited() {
+				p.setStatus(openStatus)
 			}
 			p.outgoing <- response
-			p.mu.Unlock()
 			return
 		}
 		p.mu.Unlock()

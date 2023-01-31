@@ -49,16 +49,21 @@ func NewMongoClient() *Db {
 	}
 }
 
-func (db *Db) InsertIpDetail(data *IpDetail) error {
-	if data.Id.IsZero() {
-		data.Id = primitive.NewObjectID()
+func handleId(id primitive.ObjectID) primitive.ObjectID {
+	if id.IsZero() {
+		return primitive.NewObjectID()
 	}
+	return id
+}
+
+func (db *Db) InsertIpDetail(data *IpDetail) error {
+	data.Id = handleId(data.Id)
 	_, err := db.ipData.InsertOne(context.TODO(), *data)
 	return err
 }
 
 func (db *Db) InsertIpEvent(data *Event) error {
-	data.Id = primitive.NewObjectID()
+	data.Id = handleId(data.Id)
 	_, err := db.ipHits.InsertOne(context.TODO(), *data)
 	return err
 }

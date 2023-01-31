@@ -3,6 +3,8 @@ package internal
 import (
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Cache struct {
@@ -13,7 +15,8 @@ type Cache struct {
 
 type Element struct {
 	expireAt int64
-	ip       *string
+	id       primitive.ObjectID
+	ip       string
 }
 
 func NewLocalCache(timeToLive time.Duration) *Cache {
@@ -51,11 +54,11 @@ func (c *Cache) getQueueSize() int {
 	return len(c.queue)
 }
 
-func (c *Cache) Get(key string) (*string, bool) {
+func (c *Cache) Get(key string) (*Element, bool) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
 	if element := c.queue[key]; element != nil {
-		return element.ip, true
+		return element, true
 	}
 	return nil, false
 }
@@ -63,11 +66,9 @@ func (c *Cache) Get(key string) (*string, bool) {
 func (c *Cache) Set(value interface{}) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
-	switch ip := value.(type) {
-	case string:
-		c.queue[ip] = &Element{
-			expireAt: time.Now().UTC().Add(c.timeToLive).UnixMilli(),
-			ip:       &ip,
-		}
+	switch e := value.(type) {
+	case Element:
+		e.expireAt = time.Now().UTC().Add(c.timeToLive).UnixMilli()
+		c.queue[e.ip] = &e
 	}
 }
