@@ -68,6 +68,14 @@ func (c *Cache) Set(value interface{}) {
 	c.mu.Lock()
 	switch e := value.(type) {
 	case Element:
+		if c.queue[e.ip] != nil {
+			return
+		}
+		for _, v := range c.queue {
+			if e.ip == v.ip {
+				return
+			}
+		}
 		e.expireAt = time.Now().UTC().Add(c.timeToLive).UnixMilli()
 		c.queue[e.ip] = &e
 	}

@@ -121,6 +121,5 @@ func (p *IpProcessor) ipProcessor(event IpDetail) {
 			p.outgoing <- response
 			return
 		}
-		p.mu.Unlock()
 	}
 }

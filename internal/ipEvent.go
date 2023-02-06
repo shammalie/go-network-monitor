@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,11 @@ type Event struct {
 
 func NewEventProcessor(db *Db) *EventProcessor {
 	var wg sync.WaitGroup
+	ipIgnore := strings.Split(viper.GetString("IP_IGNORE"), ",")
+	ignoreMap := make(map[string]string, len(ipIgnore))
+	for _, ip := range ipIgnore {
+		ignoreMap[ip] = ip
+	}
 	recEvents := viper.GetBool("RECORD_IP_EVENTS")
 	processor := &EventProcessor{
 		Events:      make(chan *network_capture_v1.NetworkCaptureRequest),
@@ -49,7 +55,9 @@ func NewEventProcessor(db *Db) *EventProcessor {
 	go func() {
 		defer wg.Done()
 		for event := range processor.Events {
-			processor.handleEvent(event)
+			if ignoreMap[event.NetworkLayer.SrcIp] == "" {
+				processor.handleEvent(event)
+			}
 		}
 	}()
 	wg.Add(1)
@@ -68,10 +76,6 @@ func NewEventProcessor(db *Db) *EventProcessor {
 }
 
 func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureRequest) {
-	if p.ipProcessor.isRateLimited() {
-		fmt.Println("processor currently rate limited, not accepting new requests")
-		return
-	}
 	processedEvent := p.convertEvent(event)
 	srcIp := processedEvent.NetworkLayerSourceIp
 	isPrivate, err := PrivateIpCheck(srcIp)
@@ -85,8 +89,13 @@ func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureReq
 	cacheElement, found := p.warmCache.Get(srcIp)
 	if !found {
 		d, err := p.db.GetIpDataByIp(srcIp)
-		if err != nil {
+		if err != nil && !p.ipProcessor.isRateLimited() {
 			id := primitive.NewObjectID()
+			p.warmCache.Set(Element{
+				id: id,
+				ip: srcIp,
+			})
+			existingId = id
 			go func() {
 				p.ipProcessor.incoming <- IpDetail{
 					Id:        id,
@@ -94,20 +103,20 @@ func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureReq
 					FirstSeen: time.Now().UTC().UnixMilli(),
 				}
 			}()
-			p.warmCache.Set(Element{
-				id: id,
-				ip: srcIp,
-			})
-			existingId = id
 		} else {
 			existingId = d.Id
 		}
 	} else {
 		existingId = cacheElement.id
 	}
-	convEvent := p.convertEvent(event)
-	convEvent.Ip_id = existingId
-	p.db.InsertIpEvent(convEvent)
+	if p.ipProcessor.isRateLimited() {
+		fmt.Println("processor currently rate limited, not accepting new requests")
+	}
+	if p.saveEvents {
+		convEvent := p.convertEvent(event)
+		convEvent.Ip_id = existingId
+		p.db.InsertIpEvent(convEvent)
+	}
 }
 
 func (p *EventProcessor) convertEvent(e *network_capture_v1.NetworkCaptureRequest) *Event {

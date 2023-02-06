@@ -81,6 +81,7 @@ func (db *Db) GetIpDataByIp(ip string) (*IpDetail, error) {
 	var doc *IpDetail
 	err := db.ipData.FindOne(context.TODO(), bson.D{{"ip", ip}}).Decode(&doc)
 	if err != nil {
+		fmt.Println(err)
 		return &IpDetail{}, err
 	}
 	return doc, nil
