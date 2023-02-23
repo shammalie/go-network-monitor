@@ -1,4 +1,4 @@
-package internal
+package state
 
 import (
 	"fmt"
@@ -40,7 +40,7 @@ func TestCache_Get(t *testing.T) {
 	cache := NewLocalCache(10 * time.Second)
 	cache.Set(ip)
 	element, found := cache.Get(ip)
-	if !found || element.ip != ip {
+	if !found || element != ip {
 		t.Errorf("the ip should match")
 	}
 }

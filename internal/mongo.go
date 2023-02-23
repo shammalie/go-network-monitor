@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/shammalie/network_ip_bearer/pkg/ipapi"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -56,7 +57,7 @@ func handleId(id primitive.ObjectID) primitive.ObjectID {
 	return id
 }
 
-func (db *Db) InsertIpDetail(data *IpDetail) error {
+func (db *Db) InsertIpDetail(data *ipapi.IpDetail) error {
 	data.Id = handleId(data.Id)
 	_, err := db.ipData.InsertOne(context.TODO(), *data)
 	return err
@@ -68,33 +69,32 @@ func (db *Db) InsertIpEvent(data *Event) error {
 	return err
 }
 
-func (db *Db) GetIpDataById(id primitive.ObjectID) (*IpDetail, error) {
-	var doc *IpDetail
+func (db *Db) GetIpDataById(id primitive.ObjectID) (*ipapi.IpDetail, error) {
+	var doc *ipapi.IpDetail
 	err := db.ipData.FindOne(context.TODO(), bson.D{{"_id", id}}).Decode(&doc)
 	if err != nil {
-		return &IpDetail{}, err
+		return &ipapi.IpDetail{}, err
 	}
 	return doc, nil
 }
 
-func (db *Db) GetIpDataByIp(ip string) (*IpDetail, error) {
-	var doc *IpDetail
+func (db *Db) GetIpDataByIp(ip string) (*ipapi.IpDetail, error) {
+	var doc *ipapi.IpDetail
 	err := db.ipData.FindOne(context.TODO(), bson.D{{"ip", ip}}).Decode(&doc)
 	if err != nil {
-		fmt.Println(err)
-		return &IpDetail{}, err
+		return &ipapi.IpDetail{}, err
 	}
 	return doc, nil
 }
 
-func (db *Db) UpdateLastSeen(id primitive.ObjectID, epoch int64) (*IpDetail, error) {
+func (db *Db) UpdateLastSeen(id primitive.ObjectID, epoch int64) (*ipapi.IpDetail, error) {
 	filter := bson.D{{"_id", id.String()}}
 	update := bson.D{{"$set",
 		bson.D{{"last_seen", epoch}},
 	}}
 	_, err := db.ipData.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
-		return &IpDetail{}, err
+		return &ipapi.IpDetail{}, err
 	}
 	return db.GetIpDataById(id)
 }

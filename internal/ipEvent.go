@@ -2,21 +2,17 @@ package internal
 
 import (
 	"fmt"
-	"strings"
-	"sync"
 	"time"
 
+	"github.com/shammalie/go-network-monitor/internal/state"
 	network_capture_v1 "github.com/shammalie/go-network-monitor/pkg/network_capture.v1"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type EventProcessor struct {
-	Events      chan *network_capture_v1.NetworkCaptureRequest
-	saveEvents  bool
-	db          *Db
-	warmCache   *Cache
-	ipProcessor *IpProcessor
+	db        *Db
+	warmCache *state.Cache
 }
 
 type Event struct {
@@ -36,46 +32,19 @@ type Event struct {
 	MetadataTruncated            bool               `bson:"metadataTruncated" json:"metadataTruncated"`
 }
 
+var recordEvents = viper.GetBool("RECORD_IP_EVENTS")
+
 func NewEventProcessor(db *Db) *EventProcessor {
-	var wg sync.WaitGroup
-	ipIgnore := strings.Split(viper.GetString("IP_IGNORE"), ",")
-	ignoreMap := make(map[string]string, len(ipIgnore))
-	for _, ip := range ipIgnore {
-		ignoreMap[ip] = ip
-	}
-	recEvents := viper.GetBool("RECORD_IP_EVENTS")
 	processor := &EventProcessor{
-		Events:      make(chan *network_capture_v1.NetworkCaptureRequest),
-		saveEvents:  recEvents,
-		db:          db,
-		warmCache:   NewLocalCache(5 * time.Second),
-		ipProcessor: NewIpProcessor(),
+		db:        db,
+		warmCache: state.NewLocalCache(5 * time.Second),
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for event := range processor.Events {
-			if ignoreMap[event.NetworkLayer.SrcIp] == "" {
-				processor.handleEvent(event)
-			}
-		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for ipDetail := range processor.ipProcessor.outgoing {
-			err := db.InsertIpDetail(ipDetail)
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Printf("processed %s\n", ipDetail.Ip)
-		}
-	}()
 	fmt.Println("started event processor")
 	return processor
 }
 
-func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureRequest) {
+// TODO: COVERT TO TRIAGE, rewrite.
+func (p *EventProcessor) ProcessEvent(event *network_capture_v1.NetworkCaptureRequest) {
 	processedEvent := p.convertEvent(event)
 	srcIp := processedEvent.NetworkLayerSourceIp
 	isPrivate, err := PrivateIpCheck(srcIp)
@@ -86,36 +55,20 @@ func (p *EventProcessor) handleEvent(event *network_capture_v1.NetworkCaptureReq
 		return
 	}
 	var existingId primitive.ObjectID
-	cacheElement, found := p.warmCache.Get(srcIp)
+	_, found := p.warmCache.Get(srcIp)
 	if !found {
 		d, err := p.db.GetIpDataByIp(srcIp)
-		if err != nil && !p.ipProcessor.isRateLimited() {
+		if err != nil {
 			id := primitive.NewObjectID()
-			p.warmCache.Set(Element{
-				id: id,
-				ip: srcIp,
-			})
+			p.warmCache.Set(srcIp)
 			existingId = id
-			go func() {
-				p.ipProcessor.incoming <- IpDetail{
-					Id:        id,
-					Ip:        srcIp,
-					FirstSeen: time.Now().UTC().UnixMilli(),
-				}
-			}()
 		} else {
 			existingId = d.Id
 		}
-	} else {
-		existingId = cacheElement.id
 	}
-	if p.ipProcessor.isRateLimited() {
-		fmt.Println("processor currently rate limited, not accepting new requests")
-	}
-	if p.saveEvents {
-		convEvent := p.convertEvent(event)
-		convEvent.Ip_id = existingId
-		p.db.InsertIpEvent(convEvent)
+	if recordEvents {
+		processedEvent.Id = existingId
+		p.db.InsertIpEvent(processedEvent)
 	}
 }
 
