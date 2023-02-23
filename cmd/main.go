@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/shammalie/go-network-monitor/internal"
+	"github.com/shammalie/go-network-monitor/internal/events"
 	"github.com/shammalie/go-network-monitor/pkg"
 	"github.com/spf13/viper"
 )
@@ -19,17 +20,15 @@ func main() {
 	if err != nil {
 		fmt.Println("no env file found, will use environment")
 	}
-
-	db := internal.NewMongoClient()
-	eventProcessor := internal.NewEventProcessor(db)
-
 	server := pkg.NewGrpcServer()
-	fmt.Printf("starting server %s:%d\n", server.Hostname, server.Port)
 	go func() {
-		for e := range server.NetworkCaptureServer.ClientEvents {
-			eventProcessor.Events <- e
+		ipIgnore := strings.Split(viper.GetString("IP_IGNORE"), ",")
+		triageService := events.NewTriageService(ipIgnore)
+		for event := range server.NetworkCaptureServer.ClientEvents {
+			triageService.Triage(event)
 		}
 	}()
+	fmt.Printf("starting server %s:%d\n", server.Hostname, server.Port)
 	if err := server.ListenAndServe(); err != nil {
 		panic(err)
 	}

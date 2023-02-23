@@ -1,10 +1,8 @@
-package internal
+package state
 
 import (
 	"sync"
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Cache struct {
@@ -15,7 +13,6 @@ type Cache struct {
 
 type Element struct {
 	expireAt int64
-	id       primitive.ObjectID
 	ip       string
 }
 
@@ -54,29 +51,26 @@ func (c *Cache) getQueueSize() int {
 	return len(c.queue)
 }
 
-func (c *Cache) Get(key string) (*Element, bool) {
+func (c *Cache) Get(key string) (string, bool) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
 	if element := c.queue[key]; element != nil {
-		return element, true
+		return element.ip, true
 	}
-	return nil, false
+	return "", false
 }
 
-func (c *Cache) Set(value interface{}) {
+func (c *Cache) Set(v string) {
 	defer c.mu.Unlock()
 	c.mu.Lock()
-	switch e := value.(type) {
-	case Element:
-		if c.queue[e.ip] != nil {
-			return
-		}
-		for _, v := range c.queue {
-			if e.ip == v.ip {
-				return
-			}
-		}
-		e.expireAt = time.Now().UTC().Add(c.timeToLive).UnixMilli()
-		c.queue[e.ip] = &e
+	c.queue[v] = &Element{
+		expireAt: time.Now().UTC().Add(c.timeToLive).UnixMilli(),
+		ip:       v,
 	}
+}
+
+func (c *Cache) Remove(v string) {
+	defer c.mu.Unlock()
+	c.mu.Lock()
+	delete(c.queue, v)
 }

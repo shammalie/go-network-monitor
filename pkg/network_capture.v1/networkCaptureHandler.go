@@ -19,6 +19,18 @@ func NewNetworkCaptureServer() *NetworkCaptureServer {
 }
 
 func (s *NetworkCaptureServer) NetworkCapture(stream NetworkCaptureService_NetworkCaptureServer) error {
+	go func() error {
+		for {
+			select {
+			case event := <-s.ClientActions:
+				if err := stream.Send(event); err != nil {
+					return err
+				}
+			case <-stream.Context().Done():
+				return stream.Context().Err()
+			}
+		}
+	}()
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -28,18 +40,6 @@ func (s *NetworkCaptureServer) NetworkCapture(stream NetworkCaptureService_Netwo
 			return err
 		}
 		s.ClientEvents <- in
-		go func() error {
-			for {
-				select {
-				case event := <-s.ClientActions:
-					if err := stream.Send(event); err != nil {
-						return err
-					}
-				case <-stream.Context().Done():
-					return stream.Context().Err()
-				}
-			}
-		}()
 	}
 }
 
