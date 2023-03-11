@@ -66,6 +66,9 @@ func (t *TriageService) queueProcessor() {
 		}
 		ip := t.ipQueryQueue.Dequeue()
 		ipDetail := ipapi.RetryRequest(ip)
+		if ipDetail == nil {
+			continue
+		}
 		log.Printf("processed ip: %s\n", ip)
 		err := t.db.InsertIpDetail(ipDetail)
 		if err != nil {
