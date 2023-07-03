@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/shammalie/network_ip_bearer/pkg/ipapi"
 	"github.com/spf13/viper"
@@ -60,6 +61,13 @@ func handleId(id primitive.ObjectID) primitive.ObjectID {
 func (db *Db) InsertIpDetail(data *ipapi.IpDetail) error {
 	data.Id = handleId(data.Id)
 	_, err := db.ipData.InsertOne(context.TODO(), *data)
+	return err
+}
+
+func (db *Db) UpdateIpDetail(data *ipapi.IpDetail) error {
+	filter := bson.M{"ip": bson.M{"$eq": data.Ip}}
+	update := bson.M{"$set": bson.M{"last_seen": time.Now().UTC().UnixMilli()}}
+	_, err := db.ipData.UpdateOne(context.TODO(), filter, update)
 	return err
 }
 

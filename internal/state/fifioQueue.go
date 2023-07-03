@@ -47,6 +47,9 @@ func (f *Fifo) Enqueue(v string) error {
 func (f *Fifo) Dequeue() string {
 	defer f.mu.Unlock()
 	f.mu.Lock()
+	if len(f.queue) == 0 {
+		return ""
+	}
 	e := f.queue[0]
 	f.queue[0] = ""
 	f.queue = f.queue[1:]
